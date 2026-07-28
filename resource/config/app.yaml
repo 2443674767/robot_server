@@ -22,9 +22,9 @@ app: #应用配置
   # 框架运行环境，Gin框架在运行的时候默认是debug模式 有： 开发：debug，生产：release，测试模式：test
   runEnv: debug
   #跨域域名-不添加请求时报403 (开发、部署必改),部署域名时：“https://xx.goflys.cn”替换成您的域名,不限制则配："*"
-  allowurl:  http://localhost:9500,http://localhost:9501,http://192.168.2.34:9501
+  allowurl:  http://localhost:9500,http://localhost:9501,http://192.168.2.34:9500,http://192.168.2.34:9501,http://192.168.2.7:9500,http://192.168.2.7:9501
   #登录是否启用人机验证
-  loginCaptcha: true
+  loginCaptcha: false
   #是否缓存的Token内容：true是使用缓存，false时使用jwt生成的token
   cacheToken: true
   #是否允许多点登录(仅在缓存为true生效)
@@ -32,7 +32,7 @@ app: #应用配置
   #超级管理员角色是否检查数据库中的菜单是否已经添加接口权限
   superRoleAuth: false
   #是否允许通过ip访问，为false是外网无法直接通过 IP:端口 访问你的服务，只能走域名
-  ipAccess: false
+  ipAccess: true
   # 开启 pprof 进行性能分析 访问http://127.0.0.1:8081/debug/pprof/
   runpprof: false
   # 配置代码生成时-前端代码根目录位置(开发必改)
