@@ -1,0 +1,63 @@
+app: #应用配置
+  #版本号
+  version: 2.9.8
+  #运行服务端口（根据您的实际情况修改）
+  port: 8500
+  #接口合法性验证-加密字符串（为了安全部署是请修改）
+  apisecret: gofly@888
+  #JWT验证-token秘钥（为了安全部署是请修改）
+  tokenSecretKey: gf849841325189456f489
+  #刷新token时间 默认过期提前5分钟（秒）：60 * 5=300(maxRefresh值为0时,token将不会自动刷新)
+  maxRefresh: 300
+  #jwt-token超时时间 默认50分钟（秒）：60 * 50=3000
+  tokenTimeout: 3000
+  #AES算法加密字符，必须为16位，如其他端需要AES操作则需统一（为了安全部署是请修改）
+  aesEncryptKey: eI2lI3zL0qD0hY7m
+  #AES算法偏移量，必须为16位，如其他端需要AES操作则需统一（为了安全部署是请修改）
+  aesIv: "6289984834922396"
+  #设置每个TTL内的最大访问数, 内部服务/管理接口（信任度高）50–100次/秒
+  limiterMax: 60
+  #调用cpu个数 如果无需设置请写0
+  cpunum: 0
+  # 框架运行环境，Gin框架在运行的时候默认是debug模式 有： 开发：debug，生产：release，测试模式：test
+  runEnv: debug
+  #跨域域名-不添加请求时报403 (开发、部署必改),部署域名时：“https://xx.goflys.cn”替换成您的域名,不限制则配："*"
+  allowurl:  http://localhost:9500,http://localhost:9501,http://192.168.2.34:9501
+  #登录是否启用人机验证
+  loginCaptcha: true
+  #是否缓存的Token内容：true是使用缓存，false时使用jwt生成的token
+  cacheToken: true
+  #是否允许多点登录(仅在缓存为true生效)
+  multiLogin: true
+  #超级管理员角色是否检查数据库中的菜单是否已经添加接口权限
+  superRoleAuth: false
+  #是否允许通过ip访问，为false是外网无法直接通过 IP:端口 访问你的服务，只能走域名
+  ipAccess: false
+  # 开启 pprof 进行性能分析 访问http://127.0.0.1:8081/debug/pprof/
+  runpprof: false
+  # 配置代码生成时-前端代码根目录位置(开发必改)
+  vueobjroot: /Users/mrzhang/Code/go/project/gofly/gofly_front
+  #配置企业私有仓网址-后台下载是有部署在代码仓配置
+  privateHouse: https://gen.goflys.cn
+  # resource网站前端文件夹,例如admin的前端代码部署
+  webStatic: webadmin
+  # 配置根域名访问重定向路径,默认是业务端后台
+  rootview: webadmin
+  #整个模块不需登录Token验证，如api,common
+  noVerifyToken:  api
+  #开启动态token模块，如：admin 需要更安全token传输
+  dynamicToken: admin
+  #开启接口对称解密验证(全局)
+  validityApi: false
+  #不需要api接口合法性验证-app下整个模块，如admin,common
+  noVerifyApiRoot: debug,common
+  #不需要接口合法性-具体请求路径
+  noVerifyApi: /common/uploadfile/getfile,/admin/cronjob/getTest
+# 日志配置
+logger:
+  open:       false               #是否开启日志写入文件：false关闭，true开启（gin框架日志在生产：release模式生效）
+  path:       "runtime/log/app"   #日志文件路径
+  type:       "JSON"              #日志输出文档格式：JSON（机器解析）和Console（人类阅读，文本行格式）
+  level:      "info"              #日志级别: info, debug, warn, error
+  keepdays:   3                   #保留日志天数
+  cleanhour:  23                  #清除日志时间点（1~23）

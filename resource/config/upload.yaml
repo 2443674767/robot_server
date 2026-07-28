@@ -1,0 +1,38 @@
+# 存储方式
+Type: local
+# 配置传输文件最大值，如上传文件最大上限，单位为MB
+MaxBodySize: 600
+# 允许上传的文件类型
+AllowedExt: .jpg,.png,.jpeg,.pdf
+# 本地存储配置
+local: 
+  LBaseUrl: http://localhost:8500
+  LDirPath: /resource/uploads/
+# 阿里云静态云存储配置
+alioss:
+  ABaseUrl: https://hcoder.oss-cn-beijing.aliyuncs.com/
+  AEndpoint: oss-cn-beijing.aliyuncs.com
+  AKeyId: 
+  ASecret: 
+  ABucketName: 
+  ADirPath: 
+# 腾讯云静态云存储配置
+tencentcos:
+  TBaseUrl: https://gofly-1257246782.cos.ap-nanjing.myqcloud.com
+  TEndpoint: 
+  TKeyId: 
+  TSecret: 
+  TBucketName: gofly-1257246782
+  TRegion: ap-nanjing
+  TDirPath: /goflys
+# 七牛云存储配置
+qiniuoss:
+  QBaseUrl: http://t3wcppubp.hn-bkt.clouddn.com/
+  QEndpoint: 
+  QKeyId: 
+  QSecret: 
+  QBucketName: goflys
+  QDirPath: image
+  QDestBucketName: 
+  QUseHTTPS: false
+  QZone: 4

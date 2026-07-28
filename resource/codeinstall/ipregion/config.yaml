@@ -1,0 +1,28 @@
+#应用信息
+app:
+     #版本号
+     version: 1.0.0
+     #名称
+     title: ip地址解析属地区
+     #描述
+     des: 这是一个离线识别ip属地，用于显示用户ip属地，不依赖第三方的api接口，本地数据包解析，解析速度快10微秒级别的查询效率。返回数据固定格式：国家|区域|省份|城市|ISP，例如：中国|0|云南省|昆明市|移动
+     #标识包目录名
+     name: ipregion
+     #安装状态
+     isinstall: true
+     #安装是否为覆盖原来代码
+     installcover: false
+     #mod拉取依赖
+     isModTidy: false
+     #Vue前端依赖命令行
+     commandLines: ""
+     #Go后端文件路径
+     goFiles: '[{"isDir":true,"path":"/resource/static/ipregion"},{"isDir":false,"path":"/utils/plugin/ipregion.go"},{"isDir":true,"path":"/utils/plugin/ipregion"}]'
+     #vue前端文件路径
+     vueFiles: '[]'
+     #安装Go后的app下模块控制器路径（多个,分开）
+     appfolders: 
+     #数据库表名称（多个,分开）
+     packtables: 
+     #菜单ID，安装后返回的ID
+     adminmenuids: 

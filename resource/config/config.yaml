@@ -1,0 +1,38 @@
+database: #数据库配置
+  default:
+    #地址
+    hostname: 127.0.0.1 # localhost  #127.0.0.1
+    #端口           
+    hostport: 3306
+    #账号                 
+    username: root
+    #密码              
+    password: "123456"
+    #数据库名称           
+    dbname: gofly_gen_v2
+    #表名前缀
+    prefix: gf_
+    type:          "mysql"                   #数据库类型(如：mariadb/tidb/mysql/pgsql/mssql/sqlite/oracle/clickhouse/dm) 
+    sqlmode:       "NO_ENGINE_SUBSTITUTION"  #设置数据库sql_mode，当数据库类型mariadb/mysql可设置，不设置留空
+    extra:         "&parseTime=True"         #不同数据库的额外特性配置，由底层数据库driver定义,mysql填：&parseTime=True,如果pgsql配置：不填
+    role:          "master"                  #数据库主从角色(master/slave)，不使用应用层的主从机制请均设置为master
+    debug:         true                      #开启调试模式：true/false，且runEnv为 开发debug和测试模式test生效
+    stdout:        false                     #日志是否通在终端输出
+    dryrun:        false                     #生成 SQL 但不执行，可以用于准备或测试生成的 SQL
+    weight:        100                       #负载均衡权重，用于负载均衡控制（预留给多个数据库扩展）
+    charset:       "utf8mb4"                 #数据库编码(如: utf8/utf8mb4/gbk/gb2312)，一般设置为utf8mb4,低版本数据库设置utf8
+    timezone:      "Local"                   #时区配置，例如:Local",如果pgsql配置：Asia/Shanghai
+    maxIdle:       10                        #连接池最大闲置的连接数
+    maxOpen:       100                       #连接池最大打开的连接数
+    maxLifetime:   1                         #连接对象可重复使用的时间长度（单位：小时）
+    maxIdletime:   30                        #设置连接最大空闲时间（单位：秒）
+# Redis数据库配置
+redis:
+  default:
+    address: 127.0.0.1:6379
+    db: 1
+  cache:             #缓存使用的redis配置
+    address: 127.0.0.1:6379
+    db: 1
+    pass: ""
+    idleTimeout: 600

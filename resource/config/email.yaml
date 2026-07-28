@@ -1,0 +1,13 @@
+#邮箱信息
+#发送者邮箱
+senderEmail: 504500934@qq.com
+#邮箱授权码
+authCode: amidmyjnnxy(youkey)
+#邮件服务器
+serviceHost: smtp.qq.com
+#邮件服务器端口
+servicePort: 587
+#邮件标题
+mailTitle: GoFly验证码
+#邮件内容,可以是html
+mailBody: 你的验证码为：{code}
