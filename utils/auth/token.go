@@ -42,9 +42,13 @@ func GenerateToken(key string, data interface{}) (keys string, err error) {
 	if CacheToken && MultiLogin {
 		tData, _ = getCache(TokenCacheKey + key)
 		if tData != nil {
-			keys, _, err = EncryptToken(key, tData.UuId)
-			doRefresh(key, tData) //刷新token
-			return
+			// 旧 JWT 已过期时不能复用，走新建逻辑
+			if _, code := IsNotExpired(tData.JwtToken); code == JwtTokenOK {
+				keys, _, err = EncryptToken(key, tData.UuId)
+				doRefresh(key, tData) //刷新token
+				return
+			}
+			_ = removeCache(TokenCacheKey + key)
 		}
 	}
 	//获取 JWT创建原token

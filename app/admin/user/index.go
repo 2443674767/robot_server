@@ -74,8 +74,8 @@ func (api *Index) Login(ctx *gf.GinCtx) {
 			gf.Failed().SetMsg("您输入的验证码不正确！").Regin(ctx)
 			return
 		}
-		//创建token
-		auth.RevokeToken(ctx)
+		//创建token（先清除该用户旧缓存，避免多点登录复用已过期 token）
+		_ = auth.RemoveToken(gf.String(user.ID))
 		token, err := auth.GenerateToken(gf.String(user.ID), gf.Map{"uid": user.ID, "account_id": user.AccountID, "tenant_id": user.TenantID})
 		if err != nil {
 			gf.Failed().SetMsg(err.Error()).Regin(ctx)
@@ -111,7 +111,8 @@ func (api *Index) Login(ctx *gf.GinCtx) {
 			gf.Failed().SetMsg("验证码无效").SetData(emerr).Regin(ctx)
 			return
 		}
-		//创建token
+		//创建token（先清除该用户旧缓存，避免复用已过期 token）
+		_ = auth.RemoveToken(gf.String(user.ID))
 		token, err := auth.GenerateToken(gf.String(user.ID), gf.Map{"uid": user.ID, "account_id": user.AccountID, "tenant_id": user.TenantID})
 		if err != nil {
 			gf.Failed().SetMsg(err.Error()).Regin(ctx)
@@ -147,7 +148,8 @@ func (api *Index) Login(ctx *gf.GinCtx) {
 			gf.Failed().SetMsg("验证码无效").SetData(emerr).Regin(ctx)
 			return
 		}
-		//创建token
+		//创建token（先清除该用户旧缓存，避免复用已过期 token）
+		_ = auth.RemoveToken(gf.String(user.ID))
 		token, err := auth.GenerateToken(gf.String(user.ID), gf.Map{"uid": user.ID, "account_id": user.AccountID, "tenant_id": user.TenantID})
 		if err != nil {
 			gf.Failed().SetMsg(err.Error()).Regin(ctx)
