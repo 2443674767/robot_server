@@ -12,6 +12,7 @@ package controller
 import (
 	"gofly/app/admin"
 	_ "gofly/app/common"
+	_ "gofly/app/robotdog"
 	"gofly/utils/gf"
 )
 
