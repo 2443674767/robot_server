@@ -16,20 +16,26 @@ import (
 )
 
 var (
-	Q                   = new(Query)
-	Admin               *admin
-	AdminAuthDept       *adminAuthDept
-	AdminAuthRole       *adminAuthRole
-	AdminAuthRoleAccess *adminAuthRoleAccess
-	AdminAuthRule       *adminAuthRule
-	Attachment          *attachment
-	CommonMessage       *commonMessage
-	DictionaryData      *dictionaryData
-	DictionaryGroup     *dictionaryGroup
-	HomeQuickop         *homeQuickop
-	LoginLog            *loginLog
-	Member              *member
-	OperationLog        *operationLog
+	Q                     = new(Query)
+	Admin                 *admin
+	AdminAuthDept         *adminAuthDept
+	AdminAuthRole         *adminAuthRole
+	AdminAuthRoleAccess   *adminAuthRoleAccess
+	AdminAuthRule         *adminAuthRule
+	Attachment            *attachment
+	CommonMessage         *commonMessage
+	DictionaryData        *dictionaryData
+	DictionaryGroup       *dictionaryGroup
+	HomeQuickop           *homeQuickop
+	LoginLog              *loginLog
+	Member                *member
+	OperationLog          *operationLog
+	RobotdogDog           *robotdogDog
+	RobotdogMap           *robotdogMap
+	RobotdogRoute         *robotdogRoute
+	RobotdogRouteWaypoint *robotdogRouteWaypoint
+	RobotdogTask          *robotdogTask
+	RobotdogWaypoint      *robotdogWaypoint
 )
 
 func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
@@ -47,63 +53,87 @@ func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	LoginLog = &Q.LoginLog
 	Member = &Q.Member
 	OperationLog = &Q.OperationLog
+	RobotdogDog = &Q.RobotdogDog
+	RobotdogMap = &Q.RobotdogMap
+	RobotdogRoute = &Q.RobotdogRoute
+	RobotdogRouteWaypoint = &Q.RobotdogRouteWaypoint
+	RobotdogTask = &Q.RobotdogTask
+	RobotdogWaypoint = &Q.RobotdogWaypoint
 }
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:                  db,
-		Admin:               newAdmin(db, opts...),
-		AdminAuthDept:       newAdminAuthDept(db, opts...),
-		AdminAuthRole:       newAdminAuthRole(db, opts...),
-		AdminAuthRoleAccess: newAdminAuthRoleAccess(db, opts...),
-		AdminAuthRule:       newAdminAuthRule(db, opts...),
-		Attachment:          newAttachment(db, opts...),
-		CommonMessage:       newCommonMessage(db, opts...),
-		DictionaryData:      newDictionaryData(db, opts...),
-		DictionaryGroup:     newDictionaryGroup(db, opts...),
-		HomeQuickop:         newHomeQuickop(db, opts...),
-		LoginLog:            newLoginLog(db, opts...),
-		Member:              newMember(db, opts...),
-		OperationLog:        newOperationLog(db, opts...),
+		db:                    db,
+		Admin:                 newAdmin(db, opts...),
+		AdminAuthDept:         newAdminAuthDept(db, opts...),
+		AdminAuthRole:         newAdminAuthRole(db, opts...),
+		AdminAuthRoleAccess:   newAdminAuthRoleAccess(db, opts...),
+		AdminAuthRule:         newAdminAuthRule(db, opts...),
+		Attachment:            newAttachment(db, opts...),
+		CommonMessage:         newCommonMessage(db, opts...),
+		DictionaryData:        newDictionaryData(db, opts...),
+		DictionaryGroup:       newDictionaryGroup(db, opts...),
+		HomeQuickop:           newHomeQuickop(db, opts...),
+		LoginLog:              newLoginLog(db, opts...),
+		Member:                newMember(db, opts...),
+		OperationLog:          newOperationLog(db, opts...),
+		RobotdogDog:           newRobotdogDog(db, opts...),
+		RobotdogMap:           newRobotdogMap(db, opts...),
+		RobotdogRoute:         newRobotdogRoute(db, opts...),
+		RobotdogRouteWaypoint: newRobotdogRouteWaypoint(db, opts...),
+		RobotdogTask:          newRobotdogTask(db, opts...),
+		RobotdogWaypoint:      newRobotdogWaypoint(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	Admin               admin
-	AdminAuthDept       adminAuthDept
-	AdminAuthRole       adminAuthRole
-	AdminAuthRoleAccess adminAuthRoleAccess
-	AdminAuthRule       adminAuthRule
-	Attachment          attachment
-	CommonMessage       commonMessage
-	DictionaryData      dictionaryData
-	DictionaryGroup     dictionaryGroup
-	HomeQuickop         homeQuickop
-	LoginLog            loginLog
-	Member              member
-	OperationLog        operationLog
+	Admin                 admin
+	AdminAuthDept         adminAuthDept
+	AdminAuthRole         adminAuthRole
+	AdminAuthRoleAccess   adminAuthRoleAccess
+	AdminAuthRule         adminAuthRule
+	Attachment            attachment
+	CommonMessage         commonMessage
+	DictionaryData        dictionaryData
+	DictionaryGroup       dictionaryGroup
+	HomeQuickop           homeQuickop
+	LoginLog              loginLog
+	Member                member
+	OperationLog          operationLog
+	RobotdogDog           robotdogDog
+	RobotdogMap           robotdogMap
+	RobotdogRoute         robotdogRoute
+	RobotdogRouteWaypoint robotdogRouteWaypoint
+	RobotdogTask          robotdogTask
+	RobotdogWaypoint      robotdogWaypoint
 }
 
 func (q *Query) Available() bool { return q.db != nil }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:                  db,
-		Admin:               q.Admin.clone(db),
-		AdminAuthDept:       q.AdminAuthDept.clone(db),
-		AdminAuthRole:       q.AdminAuthRole.clone(db),
-		AdminAuthRoleAccess: q.AdminAuthRoleAccess.clone(db),
-		AdminAuthRule:       q.AdminAuthRule.clone(db),
-		Attachment:          q.Attachment.clone(db),
-		CommonMessage:       q.CommonMessage.clone(db),
-		DictionaryData:      q.DictionaryData.clone(db),
-		DictionaryGroup:     q.DictionaryGroup.clone(db),
-		HomeQuickop:         q.HomeQuickop.clone(db),
-		LoginLog:            q.LoginLog.clone(db),
-		Member:              q.Member.clone(db),
-		OperationLog:        q.OperationLog.clone(db),
+		db:                    db,
+		Admin:                 q.Admin.clone(db),
+		AdminAuthDept:         q.AdminAuthDept.clone(db),
+		AdminAuthRole:         q.AdminAuthRole.clone(db),
+		AdminAuthRoleAccess:   q.AdminAuthRoleAccess.clone(db),
+		AdminAuthRule:         q.AdminAuthRule.clone(db),
+		Attachment:            q.Attachment.clone(db),
+		CommonMessage:         q.CommonMessage.clone(db),
+		DictionaryData:        q.DictionaryData.clone(db),
+		DictionaryGroup:       q.DictionaryGroup.clone(db),
+		HomeQuickop:           q.HomeQuickop.clone(db),
+		LoginLog:              q.LoginLog.clone(db),
+		Member:                q.Member.clone(db),
+		OperationLog:          q.OperationLog.clone(db),
+		RobotdogDog:           q.RobotdogDog.clone(db),
+		RobotdogMap:           q.RobotdogMap.clone(db),
+		RobotdogRoute:         q.RobotdogRoute.clone(db),
+		RobotdogRouteWaypoint: q.RobotdogRouteWaypoint.clone(db),
+		RobotdogTask:          q.RobotdogTask.clone(db),
+		RobotdogWaypoint:      q.RobotdogWaypoint.clone(db),
 	}
 }
 
@@ -117,54 +147,72 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:                  db,
-		Admin:               q.Admin.replaceDB(db),
-		AdminAuthDept:       q.AdminAuthDept.replaceDB(db),
-		AdminAuthRole:       q.AdminAuthRole.replaceDB(db),
-		AdminAuthRoleAccess: q.AdminAuthRoleAccess.replaceDB(db),
-		AdminAuthRule:       q.AdminAuthRule.replaceDB(db),
-		Attachment:          q.Attachment.replaceDB(db),
-		CommonMessage:       q.CommonMessage.replaceDB(db),
-		DictionaryData:      q.DictionaryData.replaceDB(db),
-		DictionaryGroup:     q.DictionaryGroup.replaceDB(db),
-		HomeQuickop:         q.HomeQuickop.replaceDB(db),
-		LoginLog:            q.LoginLog.replaceDB(db),
-		Member:              q.Member.replaceDB(db),
-		OperationLog:        q.OperationLog.replaceDB(db),
+		db:                    db,
+		Admin:                 q.Admin.replaceDB(db),
+		AdminAuthDept:         q.AdminAuthDept.replaceDB(db),
+		AdminAuthRole:         q.AdminAuthRole.replaceDB(db),
+		AdminAuthRoleAccess:   q.AdminAuthRoleAccess.replaceDB(db),
+		AdminAuthRule:         q.AdminAuthRule.replaceDB(db),
+		Attachment:            q.Attachment.replaceDB(db),
+		CommonMessage:         q.CommonMessage.replaceDB(db),
+		DictionaryData:        q.DictionaryData.replaceDB(db),
+		DictionaryGroup:       q.DictionaryGroup.replaceDB(db),
+		HomeQuickop:           q.HomeQuickop.replaceDB(db),
+		LoginLog:              q.LoginLog.replaceDB(db),
+		Member:                q.Member.replaceDB(db),
+		OperationLog:          q.OperationLog.replaceDB(db),
+		RobotdogDog:           q.RobotdogDog.replaceDB(db),
+		RobotdogMap:           q.RobotdogMap.replaceDB(db),
+		RobotdogRoute:         q.RobotdogRoute.replaceDB(db),
+		RobotdogRouteWaypoint: q.RobotdogRouteWaypoint.replaceDB(db),
+		RobotdogTask:          q.RobotdogTask.replaceDB(db),
+		RobotdogWaypoint:      q.RobotdogWaypoint.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	Admin               IAdminDo
-	AdminAuthDept       IAdminAuthDeptDo
-	AdminAuthRole       IAdminAuthRoleDo
-	AdminAuthRoleAccess IAdminAuthRoleAccessDo
-	AdminAuthRule       IAdminAuthRuleDo
-	Attachment          IAttachmentDo
-	CommonMessage       ICommonMessageDo
-	DictionaryData      IDictionaryDataDo
-	DictionaryGroup     IDictionaryGroupDo
-	HomeQuickop         IHomeQuickopDo
-	LoginLog            ILoginLogDo
-	Member              IMemberDo
-	OperationLog        IOperationLogDo
+	Admin                 IAdminDo
+	AdminAuthDept         IAdminAuthDeptDo
+	AdminAuthRole         IAdminAuthRoleDo
+	AdminAuthRoleAccess   IAdminAuthRoleAccessDo
+	AdminAuthRule         IAdminAuthRuleDo
+	Attachment            IAttachmentDo
+	CommonMessage         ICommonMessageDo
+	DictionaryData        IDictionaryDataDo
+	DictionaryGroup       IDictionaryGroupDo
+	HomeQuickop           IHomeQuickopDo
+	LoginLog              ILoginLogDo
+	Member                IMemberDo
+	OperationLog          IOperationLogDo
+	RobotdogDog           IRobotdogDogDo
+	RobotdogMap           IRobotdogMapDo
+	RobotdogRoute         IRobotdogRouteDo
+	RobotdogRouteWaypoint IRobotdogRouteWaypointDo
+	RobotdogTask          IRobotdogTaskDo
+	RobotdogWaypoint      IRobotdogWaypointDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		Admin:               q.Admin.WithContext(ctx),
-		AdminAuthDept:       q.AdminAuthDept.WithContext(ctx),
-		AdminAuthRole:       q.AdminAuthRole.WithContext(ctx),
-		AdminAuthRoleAccess: q.AdminAuthRoleAccess.WithContext(ctx),
-		AdminAuthRule:       q.AdminAuthRule.WithContext(ctx),
-		Attachment:          q.Attachment.WithContext(ctx),
-		CommonMessage:       q.CommonMessage.WithContext(ctx),
-		DictionaryData:      q.DictionaryData.WithContext(ctx),
-		DictionaryGroup:     q.DictionaryGroup.WithContext(ctx),
-		HomeQuickop:         q.HomeQuickop.WithContext(ctx),
-		LoginLog:            q.LoginLog.WithContext(ctx),
-		Member:              q.Member.WithContext(ctx),
-		OperationLog:        q.OperationLog.WithContext(ctx),
+		Admin:                 q.Admin.WithContext(ctx),
+		AdminAuthDept:         q.AdminAuthDept.WithContext(ctx),
+		AdminAuthRole:         q.AdminAuthRole.WithContext(ctx),
+		AdminAuthRoleAccess:   q.AdminAuthRoleAccess.WithContext(ctx),
+		AdminAuthRule:         q.AdminAuthRule.WithContext(ctx),
+		Attachment:            q.Attachment.WithContext(ctx),
+		CommonMessage:         q.CommonMessage.WithContext(ctx),
+		DictionaryData:        q.DictionaryData.WithContext(ctx),
+		DictionaryGroup:       q.DictionaryGroup.WithContext(ctx),
+		HomeQuickop:           q.HomeQuickop.WithContext(ctx),
+		LoginLog:              q.LoginLog.WithContext(ctx),
+		Member:                q.Member.WithContext(ctx),
+		OperationLog:          q.OperationLog.WithContext(ctx),
+		RobotdogDog:           q.RobotdogDog.WithContext(ctx),
+		RobotdogMap:           q.RobotdogMap.WithContext(ctx),
+		RobotdogRoute:         q.RobotdogRoute.WithContext(ctx),
+		RobotdogRouteWaypoint: q.RobotdogRouteWaypoint.WithContext(ctx),
+		RobotdogTask:          q.RobotdogTask.WithContext(ctx),
+		RobotdogWaypoint:      q.RobotdogWaypoint.WithContext(ctx),
 	}
 }
 
