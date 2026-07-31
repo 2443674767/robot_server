@@ -8,4 +8,5 @@ devsource/developer/install
 tmp
 resource/config/config.local.yaml
 docx
+resource/sql
 
