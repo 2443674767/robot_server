@@ -27,12 +27,12 @@ database: #数据库配置
     maxLifetime:   1                         #连接对象可重复使用的时间长度（单位：小时）
     maxIdletime:   30                        #设置连接最大空闲时间（单位：秒）
 # Redis数据库配置
-redis:
-  default:
-    address: 127.0.0.1:6379
-    db: 1
-  cache:             #缓存使用的redis配置
-    address: 127.0.0.1:6379
-    db: 1
-    pass: ""
-    idleTimeout: 600
+#redis:
+#  default:
+#    address: 127.0.0.1:6379
+#    db: 1
+#  cache:             #缓存使用的redis配置
+#    address: 127.0.0.1:6379
+#    db: 1
+#    pass: ""
+#    idleTimeout: 600
