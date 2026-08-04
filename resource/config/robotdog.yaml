@@ -1,0 +1,8 @@
+conftype: configuration
+title: "机械狗配置"
+pluginident: "robotdog"
+status: true
+data:
+  foxglove_ws_url: "ws://10.21.31.100:8765"
+  foxglove_topic: "/base_link/odom"
+  foxglove_timeout_ms: 5000
