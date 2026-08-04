@@ -1,6 +1,7 @@
 package waypoint
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -72,6 +73,135 @@ func itemsFromParam(param map[string]interface{}, keys ...string) []interface{} 
 	return nil
 }
 
+func hasParam(param map[string]interface{}, key string) bool {
+	_, ok := param[key]
+	return ok
+}
+
+func taskItemsFromParam(param map[string]interface{}) []interface{} {
+	if !hasParam(param, "tasks") {
+		return nil
+	}
+	return gf.Interfaces(param["tasks"])
+}
+
+func allowedRouteTaskAction(action string) bool {
+	switch action {
+	case "lie", "stand", "navigate", "line_navigate", "photo", "switch_map", "relocalize", "voice":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeParamsJSON(v interface{}) string {
+	if v == nil || gf.String(v) == "" {
+		return "{}"
+	}
+	if s, ok := v.(string); ok {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return "{}"
+		}
+		if json.Valid([]byte(s)) {
+			return s
+		}
+	}
+	if raw, err := json.Marshal(v); err == nil && json.Valid(raw) {
+		return string(raw)
+	}
+	return "{}"
+}
+
+func parseRouteTasks(param map[string]interface{}, tenantID int32, routeID int64, now time.Time) ([]*model.RobotdogRouteTask, bool, error) {
+	if !hasParam(param, "tasks") {
+		return nil, false, nil
+	}
+	items := taskItemsFromParam(param)
+	tasks := make([]*model.RobotdogRouteTask, 0, len(items))
+	for i, item := range items {
+		row, ok := item.(map[string]interface{})
+		if !ok {
+			return nil, true, fmt.Errorf("第%d个子任务格式错误", i+1)
+		}
+		action := stringValue(row, "action", "")
+		if action == "" {
+			return nil, true, fmt.Errorf("第%d个子任务动作不能为空", i+1)
+		}
+		if !allowedRouteTaskAction(action) {
+			return nil, true, fmt.Errorf("第%d个子任务动作不支持: %s", i+1, action)
+		}
+		seq := gf.Int32(row["seq"])
+		if seq <= 0 {
+			seq = int32(i + 1)
+		}
+		tasks = append(tasks, &model.RobotdogRouteTask{
+			TenantID:  tenantID,
+			RouteID:   routeID,
+			Seq:       seq,
+			Action:    action,
+			WaitSec:   gf.Float64(row["wait_sec"]),
+			Params:    normalizeParamsJSON(row["params"]),
+			CreatedAt: now,
+			UpdatedAt: now,
+		})
+	}
+	return tasks, true, nil
+}
+
+func decodeTaskParams(params string) interface{} {
+	params = strings.TrimSpace(params)
+	if params == "" {
+		return map[string]interface{}{}
+	}
+	var data interface{}
+	if err := json.Unmarshal([]byte(params), &data); err != nil {
+		return map[string]interface{}{}
+	}
+	return data
+}
+
+func routeTasksData(ctx *gf.GinCtx, tenantID int32, routeID int64) []map[string]interface{} {
+	taskDB := dao.Query().RobotdogRouteTask
+	rows, err := taskDB.WithContext(ctx).Where(taskDB.TenantID.Eq(tenantID), taskDB.RouteID.Eq(routeID)).Order(taskDB.Seq.Asc(), taskDB.ID.Asc()).Find()
+	if err != nil {
+		return []map[string]interface{}{}
+	}
+	tasks := make([]map[string]interface{}, 0, len(rows))
+	for _, row := range rows {
+		tasks = append(tasks, map[string]interface{}{
+			"id":       row.ID,
+			"seq":      row.Seq,
+			"action":   row.Action,
+			"wait_sec": row.WaitSec,
+			"params":   decodeTaskParams(row.Params),
+		})
+	}
+	return tasks
+}
+
+func routeTaskMap(ctx *gf.GinCtx, tenantID int32, routeIDs []int64) map[int64][]map[string]interface{} {
+	result := make(map[int64][]map[string]interface{})
+	if len(routeIDs) == 0 {
+		return result
+	}
+	taskDB := dao.Query().RobotdogRouteTask
+	rows, err := taskDB.WithContext(ctx).Where(taskDB.TenantID.Eq(tenantID), taskDB.RouteID.In(routeIDs...)).Order(taskDB.RouteID.Asc(), taskDB.Seq.Asc(), taskDB.ID.Asc()).Find()
+	if err != nil {
+		return result
+	}
+	for _, row := range rows {
+		result[row.RouteID] = append(result[row.RouteID], map[string]interface{}{
+			"id":       row.ID,
+			"seq":      row.Seq,
+			"action":   row.Action,
+			"wait_sec": row.WaitSec,
+			"params":   decodeTaskParams(row.Params),
+		})
+	}
+	return result
+}
+
 func routeWaypointMap(ctx *gf.GinCtx, tenantID int32, routeIDs []int64) map[int64][]int64 {
 	result := make(map[int64][]int64)
 	if len(routeIDs) == 0 {
@@ -94,8 +224,10 @@ func routeListData(ctx *gf.GinCtx, tenantID int32, routes []*model.RobotdogRoute
 		ids = append(ids, route.ID)
 	}
 	wpMap := routeWaypointMap(ctx, tenantID, ids)
+	taskMap := routeTaskMap(ctx, tenantID, ids)
 	list := make([]map[string]interface{}, 0, len(routes))
 	for _, route := range routes {
+		tasks := taskMap[route.ID]
 		list = append(list, map[string]interface{}{
 			"id":           route.ID,
 			"tenant_id":    route.TenantID,
@@ -105,6 +237,8 @@ func routeListData(ctx *gf.GinCtx, tenantID int32, routes []*model.RobotdogRoute
 			"run_status":   route.RunStatus,
 			"remark":       route.Remark,
 			"waypoint_ids": wpMap[route.ID],
+			"task_count":   len(tasks),
+			"tasks":        tasks,
 			"created_at":   route.CreatedAt,
 			"updated_at":   route.UpdatedAt,
 		})
@@ -387,16 +521,21 @@ func (api *Index) SaveRoute(ctx *gf.GinCtx) {
 	if len(waypointIDs) == 0 {
 		waypointIDs = idList(param["waypoints"])
 	}
-	if len(waypointIDs) == 0 {
-		gf.Failed().SetMsg("航线至少需要一个航点").Regin(ctx)
-		return
-	}
 	name := stringValue(param, "name", "")
 	if name == "" {
 		gf.Failed().SetMsg("航线名称不能为空").Regin(ctx)
 		return
 	}
 	now := time.Now()
+	routeTasks, hasTasks, taskErr := parseRouteTasks(param, tenant, routeID, now)
+	if taskErr != nil {
+		gf.Failed().SetMsg(taskErr.Error()).Regin(ctx)
+		return
+	}
+	if len(waypointIDs) == 0 && (!hasTasks || len(routeTasks) == 0) {
+		gf.Failed().SetMsg("航线至少需要一个航点或子任务").Regin(ctx)
+		return
+	}
 	err := dao.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if routeID == 0 {
 			route := &model.RobotdogRoute{
@@ -428,6 +567,11 @@ func (api *Index) SaveRoute(ctx *gf.GinCtx) {
 			if err := tx.Where("route_id = ? AND tenant_id = ?", routeID, tenant).Delete(&model.RobotdogRouteWaypoint{}).Error; err != nil {
 				return err
 			}
+			if hasTasks {
+				if err := tx.Where("route_id = ? AND tenant_id = ?", routeID, tenant).Delete(&model.RobotdogRouteTask{}).Error; err != nil {
+					return err
+				}
+			}
 		}
 		relations := make([]*model.RobotdogRouteWaypoint, 0, len(waypointIDs))
 		for i, waypointID := range waypointIDs {
@@ -440,7 +584,20 @@ func (api *Index) SaveRoute(ctx *gf.GinCtx) {
 				UpdatedAt:  now,
 			})
 		}
-		return tx.Create(&relations).Error
+		if len(relations) > 0 {
+			if err := tx.Create(&relations).Error; err != nil {
+				return err
+			}
+		}
+		if hasTasks && len(routeTasks) > 0 {
+			for _, task := range routeTasks {
+				task.RouteID = routeID
+			}
+			if err := tx.Create(&routeTasks).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		gf.Failed().SetMsg("保存航线失败").SetData(err).Regin(ctx)
@@ -467,13 +624,19 @@ func (api *Index) updateRouteStatus(ctx *gf.GinCtx, status string, msg string) {
 	}
 	if status == "published" {
 		rwDB := dao.Query().RobotdogRouteWaypoint
-		count, err := rwDB.WithContext(ctx).Where(rwDB.TenantID.Eq(tenant), rwDB.RouteID.Eq(routeID)).Count()
+		waypointCount, err := rwDB.WithContext(ctx).Where(rwDB.TenantID.Eq(tenant), rwDB.RouteID.Eq(routeID)).Count()
 		if err != nil {
 			gf.Failed().SetMsg("校验航线航点失败").SetData(err).Regin(ctx)
 			return
 		}
-		if count == 0 {
-			gf.Failed().SetMsg("航线没有航点，不能发布").Regin(ctx)
+		taskDB := dao.Query().RobotdogRouteTask
+		taskCount, err := taskDB.WithContext(ctx).Where(taskDB.TenantID.Eq(tenant), taskDB.RouteID.Eq(routeID)).Count()
+		if err != nil {
+			gf.Failed().SetMsg("校验航线子任务失败").SetData(err).Regin(ctx)
+			return
+		}
+		if waypointCount == 0 && taskCount == 0 {
+			gf.Failed().SetMsg("航线没有航点或子任务，不能发布").Regin(ctx)
 			return
 		}
 	}
@@ -499,6 +662,9 @@ func (api *Index) DelRoute(ctx *gf.GinCtx) {
 	}
 	err := dao.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("route_id IN ? AND tenant_id = ?", ids, tenant).Delete(&model.RobotdogRouteWaypoint{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("route_id IN ? AND tenant_id = ?", ids, tenant).Delete(&model.RobotdogRouteTask{}).Error; err != nil {
 			return err
 		}
 		return tx.Where("id IN ? AND tenant_id = ?", ids, tenant).Delete(&model.RobotdogRoute{}).Error
@@ -548,7 +714,8 @@ func (api *Index) GetRouteDetail(ctx *gf.GinCtx) {
 			waypoints = append(waypoints, waypoint)
 		}
 	}
-	gf.Success().SetMsg("获取航线详情").SetData(map[string]interface{}{"route": route, "waypoint_ids": waypointIDs, "waypoints": waypoints}).Regin(ctx)
+	tasks := routeTasksData(ctx, tenant, route.ID)
+	gf.Success().SetMsg("获取航线详情").SetData(map[string]interface{}{"route": route, "waypoint_ids": waypointIDs, "waypoints": waypoints, "tasks": tasks}).Regin(ctx)
 }
 
 func (api *Index) GetPointCloud(ctx *gf.GinCtx) {
