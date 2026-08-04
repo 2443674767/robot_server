@@ -32,6 +32,7 @@ var (
 	OperationLog          *operationLog
 	RobotdogDog           *robotdogDog
 	RobotdogMap           *robotdogMap
+	RobotdogPtz           *robotdogPtz
 	RobotdogRoute         *robotdogRoute
 	RobotdogRouteWaypoint *robotdogRouteWaypoint
 	RobotdogTask          *robotdogTask
@@ -55,6 +56,7 @@ func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	OperationLog = &Q.OperationLog
 	RobotdogDog = &Q.RobotdogDog
 	RobotdogMap = &Q.RobotdogMap
+	RobotdogPtz = &Q.RobotdogPtz
 	RobotdogRoute = &Q.RobotdogRoute
 	RobotdogRouteWaypoint = &Q.RobotdogRouteWaypoint
 	RobotdogTask = &Q.RobotdogTask
@@ -79,6 +81,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		OperationLog:          newOperationLog(db, opts...),
 		RobotdogDog:           newRobotdogDog(db, opts...),
 		RobotdogMap:           newRobotdogMap(db, opts...),
+		RobotdogPtz:           newRobotdogPtz(db, opts...),
 		RobotdogRoute:         newRobotdogRoute(db, opts...),
 		RobotdogRouteWaypoint: newRobotdogRouteWaypoint(db, opts...),
 		RobotdogTask:          newRobotdogTask(db, opts...),
@@ -104,6 +107,7 @@ type Query struct {
 	OperationLog          operationLog
 	RobotdogDog           robotdogDog
 	RobotdogMap           robotdogMap
+	RobotdogPtz           robotdogPtz
 	RobotdogRoute         robotdogRoute
 	RobotdogRouteWaypoint robotdogRouteWaypoint
 	RobotdogTask          robotdogTask
@@ -130,6 +134,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		OperationLog:          q.OperationLog.clone(db),
 		RobotdogDog:           q.RobotdogDog.clone(db),
 		RobotdogMap:           q.RobotdogMap.clone(db),
+		RobotdogPtz:           q.RobotdogPtz.clone(db),
 		RobotdogRoute:         q.RobotdogRoute.clone(db),
 		RobotdogRouteWaypoint: q.RobotdogRouteWaypoint.clone(db),
 		RobotdogTask:          q.RobotdogTask.clone(db),
@@ -163,6 +168,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		OperationLog:          q.OperationLog.replaceDB(db),
 		RobotdogDog:           q.RobotdogDog.replaceDB(db),
 		RobotdogMap:           q.RobotdogMap.replaceDB(db),
+		RobotdogPtz:           q.RobotdogPtz.replaceDB(db),
 		RobotdogRoute:         q.RobotdogRoute.replaceDB(db),
 		RobotdogRouteWaypoint: q.RobotdogRouteWaypoint.replaceDB(db),
 		RobotdogTask:          q.RobotdogTask.replaceDB(db),
@@ -186,6 +192,7 @@ type queryCtx struct {
 	OperationLog          IOperationLogDo
 	RobotdogDog           IRobotdogDogDo
 	RobotdogMap           IRobotdogMapDo
+	RobotdogPtz           IRobotdogPtzDo
 	RobotdogRoute         IRobotdogRouteDo
 	RobotdogRouteWaypoint IRobotdogRouteWaypointDo
 	RobotdogTask          IRobotdogTaskDo
@@ -209,6 +216,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		OperationLog:          q.OperationLog.WithContext(ctx),
 		RobotdogDog:           q.RobotdogDog.WithContext(ctx),
 		RobotdogMap:           q.RobotdogMap.WithContext(ctx),
+		RobotdogPtz:           q.RobotdogPtz.WithContext(ctx),
 		RobotdogRoute:         q.RobotdogRoute.WithContext(ctx),
 		RobotdogRouteWaypoint: q.RobotdogRouteWaypoint.WithContext(ctx),
 		RobotdogTask:          q.RobotdogTask.WithContext(ctx),

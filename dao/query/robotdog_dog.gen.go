@@ -39,6 +39,8 @@ func newRobotdogDog(db *gorm.DB, opts ...gen.DOOption) robotdogDog {
 	_robotdogDog.StreamURL = field.NewString(tableName, "stream_url")
 	_robotdogDog.RtspURL = field.NewString(tableName, "rtsp_url")
 	_robotdogDog.MapID = field.NewInt64(tableName, "map_id")
+	_robotdogDog.UdpHost = field.NewString(tableName, "udp_host")
+	_robotdogDog.UdpPort = field.NewInt32(tableName, "udp_port")
 	_robotdogDog.Remark = field.NewString(tableName, "remark")
 	_robotdogDog.CreatedAt = field.NewTime(tableName, "created_at")
 	_robotdogDog.UpdatedAt = field.NewTime(tableName, "updated_at")
@@ -65,6 +67,8 @@ type robotdogDog struct {
 	StreamURL field.String  // 视频播放地址
 	RtspURL   field.String  // RTSP地址
 	MapID     field.Int64   // 默认地图ID
+	UdpHost   field.String  // UDP主机地址
+	UdpPort   field.Int32   // UDP端口
 	Remark    field.String  // 备注
 	CreatedAt field.Time    // 创建时间
 	UpdatedAt field.Time    // 更新时间
@@ -96,6 +100,8 @@ func (r *robotdogDog) updateTableName(table string) *robotdogDog {
 	r.StreamURL = field.NewString(table, "stream_url")
 	r.RtspURL = field.NewString(table, "rtsp_url")
 	r.MapID = field.NewInt64(table, "map_id")
+	r.UdpHost = field.NewString(table, "udp_host")
+	r.UdpPort = field.NewInt32(table, "udp_port")
 	r.Remark = field.NewString(table, "remark")
 	r.CreatedAt = field.NewTime(table, "created_at")
 	r.UpdatedAt = field.NewTime(table, "updated_at")
@@ -116,7 +122,7 @@ func (r *robotdogDog) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (r *robotdogDog) fillFieldMap() {
-	r.fieldMap = make(map[string]field.Expr, 15)
+	r.fieldMap = make(map[string]field.Expr, 17)
 	r.fieldMap["id"] = r.ID
 	r.fieldMap["tenant_id"] = r.TenantID
 	r.fieldMap["name"] = r.Name
@@ -128,6 +134,8 @@ func (r *robotdogDog) fillFieldMap() {
 	r.fieldMap["stream_url"] = r.StreamURL
 	r.fieldMap["rtsp_url"] = r.RtspURL
 	r.fieldMap["map_id"] = r.MapID
+	r.fieldMap["udp_host"] = r.UdpHost
+	r.fieldMap["udp_port"] = r.UdpPort
 	r.fieldMap["remark"] = r.Remark
 	r.fieldMap["created_at"] = r.CreatedAt
 	r.fieldMap["updated_at"] = r.UpdatedAt

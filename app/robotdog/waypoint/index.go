@@ -150,6 +150,8 @@ func (api *Index) Save(ctx *gf.GinCtx) {
 			StreamURL: stringValue(param, "stream_url", ""),
 			RtspURL:   stringValue(param, "rtsp_url", ""),
 			MapID:     gf.Int64(param["map_id"]),
+			UdpHost:   stringValue(param, "udp_host", ""),
+			UdpPort:   gf.Int32(param["udp_port"]),
 			Remark:    stringValue(param, "remark", ""),
 			CreatedAt: now,
 			UpdatedAt: now,
@@ -175,6 +177,8 @@ func (api *Index) Save(ctx *gf.GinCtx) {
 		"stream_url": stringValue(param, "stream_url", ""),
 		"rtsp_url":   stringValue(param, "rtsp_url", ""),
 		"map_id":     gf.Int64(param["map_id"]),
+		"udp_host":   stringValue(param, "udp_host", ""),
+		"udp_port":   gf.Int32(param["udp_port"]),
 		"remark":     stringValue(param, "remark", ""),
 		"updated_at": now,
 	}
