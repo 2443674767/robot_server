@@ -228,7 +228,7 @@ func ensureStepStartCondition(ctx context.Context, tenant int32, route *model.Ro
 	if err != nil {
 		return stepCheckResult{}, fmt.Errorf("第%d个子任务执行前获取机械狗状态失败:%w", step.Seq, err)
 	}
-	if strings.Contains(status.ControlStatus, "导航模式请重定位初始化") {
+	if strings.Contains(status.ControlStatus, "导航模式请重定位初始化") && step.Action != "relocalize" {
 		return stepCheckResult{}, fmt.Errorf("第%d个子任务执行前校验失败:需要先重定位初始化", step.Seq)
 	}
 	if step.Action == "navigate" {
@@ -304,11 +304,29 @@ func executeStep(ctx context.Context, tenant int32, route *model.RobotdogRoute, 
 			return nil
 		}
 		return nil
-	case "lie", "stand", "line_navigate", "photo", "switch_map", "relocalize", "voice":
+	case "relocalize":
+		pointID := stepParamID(step.Params, "id", "point_id", "location_id", "nav_id")
+		if pointID <= 0 {
+			return fmt.Errorf("第%d个relocalize子任务缺少params.id", step.Seq)
+		}
+		if _, err := postResetLocation(ctx, cfg, pointID); err != nil {
+			return fmt.Errorf("第%d个relocalize子任务发送重定位失败:%w", step.Seq, err)
+		}
+		return nil
+	case "lie", "stand", "line_navigate", "photo", "switch_map", "voice":
 		return nil
 	default:
 		return fmt.Errorf("第%d个子任务动作不支持:%s", step.Seq, step.Action)
 	}
+}
+
+func stepParamID(params map[string]interface{}, names ...string) int64 {
+	for _, name := range names {
+		if id := gf.Int64(params[name]); id > 0 {
+			return id
+		}
+	}
+	return 0
 }
 
 func ensureStepEndCondition(ctx context.Context, tenant int32, route *model.RobotdogRoute, step routeStep, cfg robotdogTaskConfig) error {

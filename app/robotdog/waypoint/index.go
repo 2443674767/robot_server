@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -955,6 +956,35 @@ func (api *Index) GetPointCloud(ctx *gf.GinCtx) {
 		return
 	}
 	gf.Success().SetMsg("获取点云地图").SetData(pointMap).Regin(ctx)
+}
+
+func (api *Index) GetNavData(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	page := gf.Int(param["page"])
+	if page <= 0 {
+		page = 1
+	}
+	data, err := deviceExtraGet(ctx.Request.Context(), "/api/extra/get_nav_data", url.Values{"page": []string{fmt.Sprintf("%d", page)}})
+	if err != nil {
+		gf.Failed().SetMsg("获取导航点位列表失败").SetData(err.Error()).Regin(ctx)
+		return
+	}
+	gf.Success().SetMsg("获取导航点位列表成功").SetData(data).Regin(ctx)
+}
+
+func (api *Index) ResetLocation(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	id := gf.Int(param["id"])
+	if id <= 0 {
+		gf.Failed().SetMsg("重定位点位ID不能为空").Regin(ctx)
+		return
+	}
+	data, err := deviceExtraPost(ctx.Request.Context(), "/api/extra/reset_location", map[string]interface{}{"id": id})
+	if err != nil {
+		gf.Failed().SetMsg("重定位失败").SetData(err.Error()).Regin(ctx)
+		return
+	}
+	gf.Success().SetMsg("重定位请求已发送").SetData(data).Regin(ctx)
 }
 
 func (api *Index) GetMapList(ctx *gf.GinCtx) {
