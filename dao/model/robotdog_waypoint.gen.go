@@ -14,18 +14,37 @@ const TableNameRobotdogWaypoint = "gf_robotdog_waypoint"
 
 // RobotdogWaypoint 机械狗航点
 type RobotdogWaypoint struct {
-	ID        int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
-	TenantID  int32          `gorm:"column:tenant_id;not null;default:1;comment:租户唯一标识" json:"tenant_id"` // 租户唯一标识
-	MapID     int64          `gorm:"column:map_id;not null;comment:地图ID" json:"map_id"`                   // 地图ID
-	Name      string         `gorm:"column:name;not null;comment:航点名称" json:"name"`                       // 航点名称
-	X         float64        `gorm:"column:x;not null;default:0.0000;comment:X坐标" json:"x"`               // X坐标
-	Y         float64        `gorm:"column:y;not null;default:0.0000;comment:Y坐标" json:"y"`               // Y坐标
-	Z         float64        `gorm:"column:z;not null;default:0.0000;comment:Z坐标" json:"z"`               // Z坐标
-	Yaw       float64        `gorm:"column:yaw;not null;default:0.00;comment:航向角" json:"yaw"`             // 航向角
-	Remark    string         `gorm:"column:remark;not null;comment:备注" json:"remark"`                     // 备注
-	CreatedAt time.Time      `gorm:"column:created_at;comment:创建时间" json:"created_at"`                    // 创建时间
-	UpdatedAt time.Time      `gorm:"column:updated_at;comment:更新时间" json:"updated_at"`                    // 更新时间
-	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;comment:删除时间" json:"deleted_at"`                    // 删除时间
+	ID                 int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                               // ID
+	TenantID           int32          `gorm:"column:tenant_id;not null;default:1;comment:租户唯一标识" json:"tenant_id"`                        // 租户唯一标识
+	MapID              int64          `gorm:"column:map_id;not null;comment:地图ID" json:"map_id"`                                          // 地图ID
+	DogID              int64          `gorm:"column:dog_id;not null;default:0;comment:机械狗ID" json:"dog_id"`                               // 机械狗ID
+	Name               string         `gorm:"column:name;not null;comment:航点名称" json:"name"`                                              // 航点名称
+	X                  float64        `gorm:"column:x;not null;default:0.0000;comment:X坐标" json:"x"`                                      // X坐标
+	Y                  float64        `gorm:"column:y;not null;default:0.0000;comment:Y坐标" json:"y"`                                      // Y坐标
+	Z                  float64        `gorm:"column:z;not null;default:0.0000;comment:Z坐标" json:"z"`                                      // Z坐标
+	Yaw                float64        `gorm:"column:yaw;not null;default:0.00;comment:航向角" json:"yaw"`                                    // 航向角
+	Source             string         `gorm:"column:source;not null;default:manual;comment:数据来源" json:"source"`                           // 数据来源
+	FoxgloveWsURL      string         `gorm:"column:foxglove_ws_url;not null;comment:Foxglove WS地址" json:"foxglove_ws_url"`               // Foxglove WS地址
+	FoxgloveTopic      string         `gorm:"column:foxglove_topic;not null;comment:Foxglove Topic" json:"foxglove_topic"`                // Foxglove Topic
+	FoxgloveSchemaName string         `gorm:"column:foxglove_schema_name;not null;comment:Foxglove Schema" json:"foxglove_schema_name"`   // Foxglove Schema
+	FoxgloveTimestamp  int64          `gorm:"column:foxglove_timestamp;not null;default:0;comment:Foxglove时间戳" json:"foxglove_timestamp"` // Foxglove时间戳
+	FrameID            string         `gorm:"column:frame_id;not null;comment:坐标系FrameID" json:"frame_id"`                                // 坐标系FrameID
+	ChildFrameID       string         `gorm:"column:child_frame_id;not null;comment:子坐标系FrameID" json:"child_frame_id"`                   // 子坐标系FrameID
+	OrientationX       float64        `gorm:"column:orientation_x;not null;default:0.000000;comment:姿态X" json:"orientation_x"`            // 姿态X
+	OrientationY       float64        `gorm:"column:orientation_y;not null;default:0.000000;comment:姿态Y" json:"orientation_y"`            // 姿态Y
+	OrientationZ       float64        `gorm:"column:orientation_z;not null;default:0.000000;comment:姿态Z" json:"orientation_z"`            // 姿态Z
+	OrientationW       float64        `gorm:"column:orientation_w;not null;default:1.000000;comment:姿态W" json:"orientation_w"`            // 姿态W
+	TwistLinearX       float64        `gorm:"column:twist_linear_x;not null;default:0.000000;comment:线速度X" json:"twist_linear_x"`         // 线速度X
+	TwistLinearY       float64        `gorm:"column:twist_linear_y;not null;default:0.000000;comment:线速度Y" json:"twist_linear_y"`         // 线速度Y
+	TwistLinearZ       float64        `gorm:"column:twist_linear_z;not null;default:0.000000;comment:线速度Z" json:"twist_linear_z"`         // 线速度Z
+	TwistAngularX      float64        `gorm:"column:twist_angular_x;not null;default:0.000000;comment:角速度X" json:"twist_angular_x"`       // 角速度X
+	TwistAngularY      float64        `gorm:"column:twist_angular_y;not null;default:0.000000;comment:角速度Y" json:"twist_angular_y"`       // 角速度Y
+	TwistAngularZ      float64        `gorm:"column:twist_angular_z;not null;default:0.000000;comment:角速度Z" json:"twist_angular_z"`       // 角速度Z
+	RawData            string         `gorm:"column:raw_data;comment:完整解码JSON" json:"raw_data"`                                           // 完整解码JSON
+	Remark             string         `gorm:"column:remark;not null;comment:备注" json:"remark"`                                            // 备注
+	CreatedAt          time.Time      `gorm:"column:created_at;comment:创建时间" json:"created_at"`                                           // 创建时间
+	UpdatedAt          time.Time      `gorm:"column:updated_at;comment:更新时间" json:"updated_at"`                                           // 更新时间
+	DeletedAt          gorm.DeletedAt `gorm:"column:deleted_at;comment:删除时间" json:"deleted_at"`                                           // 删除时间
 }
 
 // TableName RobotdogWaypoint's table name

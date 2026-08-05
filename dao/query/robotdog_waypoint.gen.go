@@ -31,11 +31,30 @@ func newRobotdogWaypoint(db *gorm.DB, opts ...gen.DOOption) robotdogWaypoint {
 	_robotdogWaypoint.ID = field.NewInt64(tableName, "id")
 	_robotdogWaypoint.TenantID = field.NewInt32(tableName, "tenant_id")
 	_robotdogWaypoint.MapID = field.NewInt64(tableName, "map_id")
+	_robotdogWaypoint.DogID = field.NewInt64(tableName, "dog_id")
 	_robotdogWaypoint.Name = field.NewString(tableName, "name")
 	_robotdogWaypoint.X = field.NewFloat64(tableName, "x")
 	_robotdogWaypoint.Y = field.NewFloat64(tableName, "y")
 	_robotdogWaypoint.Z = field.NewFloat64(tableName, "z")
 	_robotdogWaypoint.Yaw = field.NewFloat64(tableName, "yaw")
+	_robotdogWaypoint.Source = field.NewString(tableName, "source")
+	_robotdogWaypoint.FoxgloveWsURL = field.NewString(tableName, "foxglove_ws_url")
+	_robotdogWaypoint.FoxgloveTopic = field.NewString(tableName, "foxglove_topic")
+	_robotdogWaypoint.FoxgloveSchemaName = field.NewString(tableName, "foxglove_schema_name")
+	_robotdogWaypoint.FoxgloveTimestamp = field.NewInt64(tableName, "foxglove_timestamp")
+	_robotdogWaypoint.FrameID = field.NewString(tableName, "frame_id")
+	_robotdogWaypoint.ChildFrameID = field.NewString(tableName, "child_frame_id")
+	_robotdogWaypoint.OrientationX = field.NewFloat64(tableName, "orientation_x")
+	_robotdogWaypoint.OrientationY = field.NewFloat64(tableName, "orientation_y")
+	_robotdogWaypoint.OrientationZ = field.NewFloat64(tableName, "orientation_z")
+	_robotdogWaypoint.OrientationW = field.NewFloat64(tableName, "orientation_w")
+	_robotdogWaypoint.TwistLinearX = field.NewFloat64(tableName, "twist_linear_x")
+	_robotdogWaypoint.TwistLinearY = field.NewFloat64(tableName, "twist_linear_y")
+	_robotdogWaypoint.TwistLinearZ = field.NewFloat64(tableName, "twist_linear_z")
+	_robotdogWaypoint.TwistAngularX = field.NewFloat64(tableName, "twist_angular_x")
+	_robotdogWaypoint.TwistAngularY = field.NewFloat64(tableName, "twist_angular_y")
+	_robotdogWaypoint.TwistAngularZ = field.NewFloat64(tableName, "twist_angular_z")
+	_robotdogWaypoint.RawData = field.NewString(tableName, "raw_data")
 	_robotdogWaypoint.Remark = field.NewString(tableName, "remark")
 	_robotdogWaypoint.CreatedAt = field.NewTime(tableName, "created_at")
 	_robotdogWaypoint.UpdatedAt = field.NewTime(tableName, "updated_at")
@@ -50,19 +69,38 @@ func newRobotdogWaypoint(db *gorm.DB, opts ...gen.DOOption) robotdogWaypoint {
 type robotdogWaypoint struct {
 	robotdogWaypointDo
 
-	ALL       field.Asterisk
-	ID        field.Int64   // ID
-	TenantID  field.Int32   // 租户唯一标识
-	MapID     field.Int64   // 地图ID
-	Name      field.String  // 航点名称
-	X         field.Float64 // X坐标
-	Y         field.Float64 // Y坐标
-	Z         field.Float64 // Z坐标
-	Yaw       field.Float64 // 航向角
-	Remark    field.String  // 备注
-	CreatedAt field.Time    // 创建时间
-	UpdatedAt field.Time    // 更新时间
-	DeletedAt field.Field   // 删除时间
+	ALL                field.Asterisk
+	ID                 field.Int64   // ID
+	TenantID           field.Int32   // 租户唯一标识
+	MapID              field.Int64   // 地图ID
+	DogID              field.Int64   // 机械狗ID
+	Name               field.String  // 航点名称
+	X                  field.Float64 // X坐标
+	Y                  field.Float64 // Y坐标
+	Z                  field.Float64 // Z坐标
+	Yaw                field.Float64 // 航向角
+	Source             field.String  // 数据来源
+	FoxgloveWsURL      field.String  // Foxglove WS地址
+	FoxgloveTopic      field.String  // Foxglove Topic
+	FoxgloveSchemaName field.String  // Foxglove Schema
+	FoxgloveTimestamp  field.Int64   // Foxglove时间戳
+	FrameID            field.String  // 坐标系FrameID
+	ChildFrameID       field.String  // 子坐标系FrameID
+	OrientationX       field.Float64 // 姿态X
+	OrientationY       field.Float64 // 姿态Y
+	OrientationZ       field.Float64 // 姿态Z
+	OrientationW       field.Float64 // 姿态W
+	TwistLinearX       field.Float64 // 线速度X
+	TwistLinearY       field.Float64 // 线速度Y
+	TwistLinearZ       field.Float64 // 线速度Z
+	TwistAngularX      field.Float64 // 角速度X
+	TwistAngularY      field.Float64 // 角速度Y
+	TwistAngularZ      field.Float64 // 角速度Z
+	RawData            field.String  // 完整解码JSON
+	Remark             field.String  // 备注
+	CreatedAt          field.Time    // 创建时间
+	UpdatedAt          field.Time    // 更新时间
+	DeletedAt          field.Field   // 删除时间
 
 	fieldMap map[string]field.Expr
 }
@@ -82,11 +120,30 @@ func (r *robotdogWaypoint) updateTableName(table string) *robotdogWaypoint {
 	r.ID = field.NewInt64(table, "id")
 	r.TenantID = field.NewInt32(table, "tenant_id")
 	r.MapID = field.NewInt64(table, "map_id")
+	r.DogID = field.NewInt64(table, "dog_id")
 	r.Name = field.NewString(table, "name")
 	r.X = field.NewFloat64(table, "x")
 	r.Y = field.NewFloat64(table, "y")
 	r.Z = field.NewFloat64(table, "z")
 	r.Yaw = field.NewFloat64(table, "yaw")
+	r.Source = field.NewString(table, "source")
+	r.FoxgloveWsURL = field.NewString(table, "foxglove_ws_url")
+	r.FoxgloveTopic = field.NewString(table, "foxglove_topic")
+	r.FoxgloveSchemaName = field.NewString(table, "foxglove_schema_name")
+	r.FoxgloveTimestamp = field.NewInt64(table, "foxglove_timestamp")
+	r.FrameID = field.NewString(table, "frame_id")
+	r.ChildFrameID = field.NewString(table, "child_frame_id")
+	r.OrientationX = field.NewFloat64(table, "orientation_x")
+	r.OrientationY = field.NewFloat64(table, "orientation_y")
+	r.OrientationZ = field.NewFloat64(table, "orientation_z")
+	r.OrientationW = field.NewFloat64(table, "orientation_w")
+	r.TwistLinearX = field.NewFloat64(table, "twist_linear_x")
+	r.TwistLinearY = field.NewFloat64(table, "twist_linear_y")
+	r.TwistLinearZ = field.NewFloat64(table, "twist_linear_z")
+	r.TwistAngularX = field.NewFloat64(table, "twist_angular_x")
+	r.TwistAngularY = field.NewFloat64(table, "twist_angular_y")
+	r.TwistAngularZ = field.NewFloat64(table, "twist_angular_z")
+	r.RawData = field.NewString(table, "raw_data")
 	r.Remark = field.NewString(table, "remark")
 	r.CreatedAt = field.NewTime(table, "created_at")
 	r.UpdatedAt = field.NewTime(table, "updated_at")
@@ -107,15 +164,34 @@ func (r *robotdogWaypoint) GetFieldByName(fieldName string) (field.OrderExpr, bo
 }
 
 func (r *robotdogWaypoint) fillFieldMap() {
-	r.fieldMap = make(map[string]field.Expr, 12)
+	r.fieldMap = make(map[string]field.Expr, 31)
 	r.fieldMap["id"] = r.ID
 	r.fieldMap["tenant_id"] = r.TenantID
 	r.fieldMap["map_id"] = r.MapID
+	r.fieldMap["dog_id"] = r.DogID
 	r.fieldMap["name"] = r.Name
 	r.fieldMap["x"] = r.X
 	r.fieldMap["y"] = r.Y
 	r.fieldMap["z"] = r.Z
 	r.fieldMap["yaw"] = r.Yaw
+	r.fieldMap["source"] = r.Source
+	r.fieldMap["foxglove_ws_url"] = r.FoxgloveWsURL
+	r.fieldMap["foxglove_topic"] = r.FoxgloveTopic
+	r.fieldMap["foxglove_schema_name"] = r.FoxgloveSchemaName
+	r.fieldMap["foxglove_timestamp"] = r.FoxgloveTimestamp
+	r.fieldMap["frame_id"] = r.FrameID
+	r.fieldMap["child_frame_id"] = r.ChildFrameID
+	r.fieldMap["orientation_x"] = r.OrientationX
+	r.fieldMap["orientation_y"] = r.OrientationY
+	r.fieldMap["orientation_z"] = r.OrientationZ
+	r.fieldMap["orientation_w"] = r.OrientationW
+	r.fieldMap["twist_linear_x"] = r.TwistLinearX
+	r.fieldMap["twist_linear_y"] = r.TwistLinearY
+	r.fieldMap["twist_linear_z"] = r.TwistLinearZ
+	r.fieldMap["twist_angular_x"] = r.TwistAngularX
+	r.fieldMap["twist_angular_y"] = r.TwistAngularY
+	r.fieldMap["twist_angular_z"] = r.TwistAngularZ
+	r.fieldMap["raw_data"] = r.RawData
 	r.fieldMap["remark"] = r.Remark
 	r.fieldMap["created_at"] = r.CreatedAt
 	r.fieldMap["updated_at"] = r.UpdatedAt

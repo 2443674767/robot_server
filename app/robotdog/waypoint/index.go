@@ -3,11 +3,13 @@ package waypoint
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	internalfoxglove "gofly/app/robotdog/internal/foxglove"
 	"gofly/dao"
 	"gofly/dao/model"
 	"gofly/utils/gf"
@@ -381,46 +383,125 @@ func (api *Index) SaveWaypoint(ctx *gf.GinCtx) {
 	tenant := tenantID(ctx, param)
 	id := gf.Int64(param["id"])
 	now := time.Now()
+	name := stringValue(param, "name", "")
+	if name == "" {
+		gf.Failed().SetMsg("航点名称不能为空").Regin(ctx)
+		return
+	}
+	latest, err := internalfoxglove.FetchLatestOdometry(ctx.Request.Context(), internalfoxglove.FetchOptions{
+		WSURL: gf.String(param["ws_url"]),
+		Topic: gf.String(param["topic"]),
+	})
+	if err != nil {
+		gf.Failed().SetMsg("获取机械狗当前位置失败").SetData(err.Error()).Regin(ctx)
+		return
+	}
+	rawData, err := json.Marshal(latest)
+	if err != nil {
+		gf.Failed().SetMsg("序列化机械狗当前位置失败").SetData(err.Error()).Regin(ctx)
+		return
+	}
+	poseValues := waypointValuesFromPose(latest, string(rawData), now)
 	if id == 0 {
 		wp := &model.RobotdogWaypoint{
-			TenantID:  tenant,
-			MapID:     gf.Int64(param["map_id"]),
-			Name:      stringValue(param, "name", ""),
-			X:         gf.Float64(param["x"]),
-			Y:         gf.Float64(param["y"]),
-			Z:         gf.Float64(param["z"]),
-			Yaw:       gf.Float64(param["yaw"]),
-			Remark:    stringValue(param, "remark", ""),
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-		if wp.Name == "" {
-			gf.Failed().SetMsg("航点名称不能为空").Regin(ctx)
-			return
+			TenantID:           tenant,
+			MapID:              gf.Int64(param["map_id"]),
+			DogID:              gf.Int64(param["dog_id"]),
+			Name:               name,
+			X:                  poseValues["x"].(float64),
+			Y:                  poseValues["y"].(float64),
+			Z:                  poseValues["z"].(float64),
+			Yaw:                poseValues["yaw"].(float64),
+			Source:             poseValues["source"].(string),
+			FoxgloveWsURL:      poseValues["foxglove_ws_url"].(string),
+			FoxgloveTopic:      poseValues["foxglove_topic"].(string),
+			FoxgloveSchemaName: poseValues["foxglove_schema_name"].(string),
+			FoxgloveTimestamp:  poseValues["foxglove_timestamp"].(int64),
+			FrameID:            poseValues["frame_id"].(string),
+			ChildFrameID:       poseValues["child_frame_id"].(string),
+			OrientationX:       poseValues["orientation_x"].(float64),
+			OrientationY:       poseValues["orientation_y"].(float64),
+			OrientationZ:       poseValues["orientation_z"].(float64),
+			OrientationW:       poseValues["orientation_w"].(float64),
+			TwistLinearX:       poseValues["twist_linear_x"].(float64),
+			TwistLinearY:       poseValues["twist_linear_y"].(float64),
+			TwistLinearZ:       poseValues["twist_linear_z"].(float64),
+			TwistAngularX:      poseValues["twist_angular_x"].(float64),
+			TwistAngularY:      poseValues["twist_angular_y"].(float64),
+			TwistAngularZ:      poseValues["twist_angular_z"].(float64),
+			RawData:            poseValues["raw_data"].(string),
+			Remark:             stringValue(param, "remark", ""),
+			CreatedAt:          now,
+			UpdatedAt:          now,
 		}
 		if err := wpDB.WithContext(ctx).Create(wp); err != nil {
 			gf.Failed().SetMsg("添加航点失败").SetData(err).Regin(ctx)
 			return
 		}
-		gf.Success().SetMsg("添加航点成功").SetData(wp.ID).Regin(ctx)
+		gf.Success().SetMsg("添加航点成功").SetData(wp).Regin(ctx)
 		return
 	}
 	updates := map[string]interface{}{
 		"map_id":     gf.Int64(param["map_id"]),
-		"name":       stringValue(param, "name", ""),
-		"x":          gf.Float64(param["x"]),
-		"y":          gf.Float64(param["y"]),
-		"z":          gf.Float64(param["z"]),
-		"yaw":        gf.Float64(param["yaw"]),
+		"dog_id":     gf.Int64(param["dog_id"]),
+		"name":       name,
 		"remark":     stringValue(param, "remark", ""),
 		"updated_at": now,
+	}
+	for k, v := range poseValues {
+		updates[k] = v
 	}
 	res, err := wpDB.WithContext(ctx).Where(wpDB.ID.Eq(id), wpDB.TenantID.Eq(tenant)).Updates(updates)
 	if err != nil {
 		gf.Failed().SetMsg("更新航点失败").SetData(err).Regin(ctx)
 		return
 	}
-	gf.Success().SetMsg("更新航点成功").SetData(res).Regin(ctx)
+	if res.RowsAffected == 0 {
+		gf.Failed().SetMsg("航点不存在").Regin(ctx)
+		return
+	}
+	wp, err := wpDB.WithContext(ctx).Where(wpDB.ID.Eq(id), wpDB.TenantID.Eq(tenant)).First()
+	if err != nil {
+		gf.Failed().SetMsg("获取更新后航点失败").SetData(err).Regin(ctx)
+		return
+	}
+	gf.Success().SetMsg("更新航点成功").SetData(wp).Regin(ctx)
+}
+
+func waypointValuesFromPose(latest *internalfoxglove.PoseMessage, rawData string, now time.Time) map[string]interface{} {
+	decoded := latest.Decoded
+	q := decoded.Pose.Orientation
+	return map[string]interface{}{
+		"x":                    decoded.NavCustomPayload.PositionX,
+		"y":                    decoded.NavCustomPayload.PositionY,
+		"z":                    decoded.NavCustomPayload.PositionZ,
+		"yaw":                  yawFromQuaternion(q.X, q.Y, q.Z, q.W),
+		"source":               "foxglove",
+		"foxglove_ws_url":      latest.WSURL,
+		"foxglove_topic":       latest.Topic,
+		"foxglove_schema_name": latest.SchemaName,
+		"foxglove_timestamp":   int64(latest.Timestamp),
+		"frame_id":             decoded.Header.FrameID,
+		"child_frame_id":       decoded.ChildFrameID,
+		"orientation_x":        decoded.NavCustomPayload.OrientationX,
+		"orientation_y":        decoded.NavCustomPayload.OrientationY,
+		"orientation_z":        decoded.NavCustomPayload.OrientationZ,
+		"orientation_w":        decoded.NavCustomPayload.OrientationW,
+		"twist_linear_x":       decoded.Twist.Linear.X,
+		"twist_linear_y":       decoded.Twist.Linear.Y,
+		"twist_linear_z":       decoded.Twist.Linear.Z,
+		"twist_angular_x":      decoded.Twist.Angular.X,
+		"twist_angular_y":      decoded.Twist.Angular.Y,
+		"twist_angular_z":      decoded.Twist.Angular.Z,
+		"raw_data":             rawData,
+		"updated_at":           now,
+	}
+}
+
+func yawFromQuaternion(x, y, z, w float64) float64 {
+	sinyCosp := 2 * (w*z + x*y)
+	cosyCosp := 1 - 2*(y*y+z*z)
+	return math.Atan2(sinyCosp, cosyCosp) * 180 / math.Pi
 }
 
 func (api *Index) DelWaypoint(ctx *gf.GinCtx) {
@@ -471,16 +552,18 @@ func (api *Index) ImportWaypoint(ctx *gf.GinCtx) {
 		}
 		name := stringValue(row, "name", fmt.Sprintf("航点%d", i+1))
 		points = append(points, &model.RobotdogWaypoint{
-			TenantID:  tenant,
-			MapID:     gf.Int64(row["map_id"]),
-			Name:      name,
-			X:         gf.Float64(row["x"]),
-			Y:         gf.Float64(row["y"]),
-			Z:         gf.Float64(row["z"]),
-			Yaw:       gf.Float64(row["yaw"]),
-			Remark:    stringValue(row, "remark", ""),
-			CreatedAt: now,
-			UpdatedAt: now,
+			TenantID:     tenant,
+			MapID:        gf.Int64(row["map_id"]),
+			Name:         name,
+			X:            gf.Float64(row["x"]),
+			Y:            gf.Float64(row["y"]),
+			Z:            gf.Float64(row["z"]),
+			Yaw:          gf.Float64(row["yaw"]),
+			Source:       "manual",
+			OrientationW: 1,
+			Remark:       stringValue(row, "remark", ""),
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		})
 	}
 	if err := dao.Query().RobotdogWaypoint.WithContext(ctx).CreateInBatches(points, 100); err != nil {
