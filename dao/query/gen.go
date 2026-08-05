@@ -34,6 +34,7 @@ var (
 	RobotdogMap           *robotdogMap
 	RobotdogPtz           *robotdogPtz
 	RobotdogRoute         *robotdogRoute
+	RobotdogRouteEdge     *robotdogRouteEdge
 	RobotdogRouteTask     *robotdogRouteTask
 	RobotdogRouteWaypoint *robotdogRouteWaypoint
 	RobotdogTask          *robotdogTask
@@ -59,6 +60,7 @@ func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	RobotdogMap = &Q.RobotdogMap
 	RobotdogPtz = &Q.RobotdogPtz
 	RobotdogRoute = &Q.RobotdogRoute
+	RobotdogRouteEdge = &Q.RobotdogRouteEdge
 	RobotdogRouteTask = &Q.RobotdogRouteTask
 	RobotdogRouteWaypoint = &Q.RobotdogRouteWaypoint
 	RobotdogTask = &Q.RobotdogTask
@@ -85,6 +87,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		RobotdogMap:           newRobotdogMap(db, opts...),
 		RobotdogPtz:           newRobotdogPtz(db, opts...),
 		RobotdogRoute:         newRobotdogRoute(db, opts...),
+		RobotdogRouteEdge:     newRobotdogRouteEdge(db, opts...),
 		RobotdogRouteTask:     newRobotdogRouteTask(db, opts...),
 		RobotdogRouteWaypoint: newRobotdogRouteWaypoint(db, opts...),
 		RobotdogTask:          newRobotdogTask(db, opts...),
@@ -112,6 +115,7 @@ type Query struct {
 	RobotdogMap           robotdogMap
 	RobotdogPtz           robotdogPtz
 	RobotdogRoute         robotdogRoute
+	RobotdogRouteEdge     robotdogRouteEdge
 	RobotdogRouteTask     robotdogRouteTask
 	RobotdogRouteWaypoint robotdogRouteWaypoint
 	RobotdogTask          robotdogTask
@@ -140,6 +144,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		RobotdogMap:           q.RobotdogMap.clone(db),
 		RobotdogPtz:           q.RobotdogPtz.clone(db),
 		RobotdogRoute:         q.RobotdogRoute.clone(db),
+		RobotdogRouteEdge:     q.RobotdogRouteEdge.clone(db),
 		RobotdogRouteTask:     q.RobotdogRouteTask.clone(db),
 		RobotdogRouteWaypoint: q.RobotdogRouteWaypoint.clone(db),
 		RobotdogTask:          q.RobotdogTask.clone(db),
