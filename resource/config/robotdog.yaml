@@ -5,4 +5,10 @@ status: true
 data:
   foxglove_ws_url: "ws://10.21.31.100:8765"
   foxglove_topic: "/base_link/odom"
-  foxglove_timeout_ms: 5000
+  foxglove_timeout_ms: 10000
+  status_api_host: "10.21.31.100"
+  status_api_port: 9000
+  status_api_timeout_ms: 5000
+  status_poll_interval_sec: 2
+  status_max_wait_sec: 180
+  align_wait_sec: 10
