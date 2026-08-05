@@ -353,6 +353,8 @@ func (api *Index) GetList(ctx *gf.GinCtx) {
 	dogDB := dao.Query().RobotdogDog
 	tenant := tenantID(ctx, param)
 	where := []dao.Condition{dogDB.TenantID.Eq(tenant)}
+	// mine=1 is accepted for the frontend contract. The current dog table has no
+	// user owner column, so tenant isolation is the effective scope for now.
 	if name := stringValue(param, "name", ""); name != "" {
 		where = append(where, dogDB.Name.Like("%"+name+"%"))
 	}
@@ -365,7 +367,7 @@ func (api *Index) GetList(ctx *gf.GinCtx) {
 		gf.Failed().SetMsg("获取机械狗列表失败").SetData(err).Regin(ctx)
 		return
 	}
-	gf.Success().SetMsg("获取机械狗列表").SetData(map[string]interface{}{"list": list, "total": total}).Regin(ctx)
+	gf.Success().SetMsg("获取列表成功").SetData(map[string]interface{}{"list": list, "total": total}).Regin(ctx)
 }
 
 func (api *Index) Save(ctx *gf.GinCtx) {
@@ -462,6 +464,9 @@ func (api *Index) GetWaypointList(ctx *gf.GinCtx) {
 	wpDB := dao.Query().RobotdogWaypoint
 	tenant := tenantID(ctx, param)
 	where := []dao.Condition{wpDB.TenantID.Eq(tenant)}
+	if dogID := gf.Int64(param["dog_id"]); dogID > 0 {
+		where = append(where, wpDB.DogID.Eq(dogID))
+	}
 	if mapID := gf.Int64(param["map_id"]); mapID > 0 {
 		where = append(where, wpDB.MapID.Eq(mapID))
 	}
