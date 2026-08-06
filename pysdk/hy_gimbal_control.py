@@ -1038,6 +1038,43 @@ def build_parser():
         help="Seconds to wait for HY_CAMERA_GENERAL_ACK after sending zoom.",
     )
 
+    def add_zoom_delta_parser(name, help_text, default_delta):
+        zoom_delta_p = sub.add_parser(name, help=help_text)
+        zoom_delta_p.add_argument(
+            "--step",
+            type=int,
+            default=1,
+            help="Zoom delta step. Default: 1.",
+        )
+        zoom_delta_p.add_argument(
+            "--min-times",
+            type=int,
+            default=1,
+            help="Minimum zoom target. Default: 1.",
+        )
+        zoom_delta_p.add_argument(
+            "--max-times",
+            type=int,
+            default=30,
+            help="Maximum zoom target. Default: 30.",
+        )
+        zoom_delta_p.add_argument(
+            "--status-seconds",
+            type=float,
+            default=3.0,
+            help="Seconds to read current zoom before applying delta.",
+        )
+        zoom_delta_p.add_argument(
+            "--fallback-times",
+            type=int,
+            default=1,
+            help="Current zoom fallback when HY_CAMERA_REPORT is unavailable.",
+        )
+        zoom_delta_p.set_defaults(zoom_delta=default_delta)
+
+    add_zoom_delta_parser("zoom-in", "Increase visible-light zoom by step.", 1)
+    add_zoom_delta_parser("zoom-out", "Decrease visible-light zoom by step.", -1)
+
     zoom_status_p = sub.add_parser("zoom-status", help="Test current zoom reading only.")
     zoom_status_p.add_argument(
         "--seconds",
@@ -1336,6 +1373,14 @@ def run(args):
                 )
             else:
                 print("No HY_CAMERA_GENERAL_ACK received for zoom command.")
+        elif args.command in {"zoom-in", "zoom-out"}:
+            if not client.last_camera:
+                client.request_camera_status_until_report(args.status_seconds)
+            current = client.last_camera.zoom_times if client.last_camera else args.fallback_times
+            target = current + (args.zoom_delta * max(1, int(args.step)))
+            target = max(args.min_times, min(args.max_times, target))
+            client.set_zoom(target)
+            print(f"Sent {args.command}: current={current}x, target={target}x")
         elif args.command == "zoom-status":
             heartbeat_values = [
                 int(value.strip())
