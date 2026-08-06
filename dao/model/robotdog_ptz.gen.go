@@ -14,19 +14,30 @@ const TableNameRobotdogPtz = "gf_robotdog_ptz"
 
 // RobotdogPtz 机械狗云台
 type RobotdogPtz struct {
-	ID        int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                  // ID
-	TenantID  int32          `gorm:"column:tenant_id;not null;default:1;comment:租户唯一标识" json:"tenant_id"`           // 租户唯一标识
-	Name      string         `gorm:"column:name;not null;comment:云台名称" json:"name"`                                 // 云台名称
-	Brand     string         `gorm:"column:brand;not null;default:default;comment:品牌" json:"brand"`                 // 品牌
-	Model     string         `gorm:"column:model;not null;default:default;comment:型号" json:"model"`                 // 型号
-	Protocol  string         `gorm:"column:protocol;not null;default:udp;comment:协议" json:"protocol"`               // 协议
-	UdpHost   string         `gorm:"column:udp_host;not null;comment:UDP主机地址" json:"udp_host"`                      // UDP主机地址
-	UdpPort   int32          `gorm:"column:udp_port;not null;comment:UDP端口" json:"udp_port"`                        // UDP端口
-	Status    string         `gorm:"column:status;not null;default:online;comment:状态:online/offline" json:"status"` // 状态:online/offline
-	Remark    string         `gorm:"column:remark;not null;comment:备注" json:"remark"`                               // 备注
-	CreatedAt time.Time      `gorm:"column:created_at;comment:创建时间" json:"created_at"`                              // 创建时间
-	UpdatedAt time.Time      `gorm:"column:updated_at;comment:更新时间" json:"updated_at"`                              // 更新时间
-	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;comment:删除时间" json:"deleted_at"`                              // 删除时间
+	ID                int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                            // ID
+	TenantID          int32          `gorm:"column:tenant_id;not null;default:1;comment:租户唯一标识" json:"tenant_id"`                     // 租户唯一标识
+	DeviceUID         string         `gorm:"column:device_uid;not null;comment:设备唯一标识" json:"device_uid"`                             // 设备唯一标识
+	Name              string         `gorm:"column:name;not null;comment:云台名称" json:"name"`                                           // 云台名称
+	DeviceName        string         `gorm:"column:device_name;not null;comment:设备名称" json:"device_name"`                             // 设备名称
+	Username          string         `gorm:"column:username;not null;comment:设备用户名" json:"username"`                                  // 设备用户名
+	Password          string         `gorm:"column:password;not null;comment:设备密码" json:"password"`                                   // 设备密码
+	Brand             string         `gorm:"column:brand;not null;default:default;comment:品牌" json:"brand"`                           // 品牌
+	Model             string         `gorm:"column:model;not null;default:default;comment:型号" json:"model"`                           // 型号
+	Protocol          string         `gorm:"column:protocol;not null;default:udp;comment:协议" json:"protocol"`                         // 协议
+	IPAddr            string         `gorm:"column:ip_addr;not null;comment:IP地址" json:"ip_addr"`                                     // IP地址
+	UdpHost           string         `gorm:"column:udp_host;not null;comment:UDP主机地址" json:"udp_host"`                                // UDP主机地址
+	UdpPort           int32          `gorm:"column:udp_port;not null;comment:UDP端口" json:"udp_port"`                                  // UDP端口
+	LocalPort         int32          `gorm:"column:local_port;not null;comment:本地监听端口" json:"local_port"`                             // 本地监听端口
+	TargetSystemID    int32          `gorm:"column:target_system_id;not null;default:3;comment:目标系统ID" json:"target_system_id"`       // 目标系统ID
+	TargetComponentID int32          `gorm:"column:target_component_id;not null;default:1;comment:目标组件ID" json:"target_component_id"` // 目标组件ID
+	SourceSystemID    int32          `gorm:"column:source_system_id;not null;default:1;comment:来源系统ID" json:"source_system_id"`       // 来源系统ID
+	SourceComponentID int32          `gorm:"column:source_component_id;not null;default:1;comment:来源组件ID" json:"source_component_id"` // 来源组件ID
+	RTSPURL           string         `gorm:"column:rtsp_url;not null;comment:RTSP地址" json:"rtsp_url"`                                 // RTSP地址
+	Status            string         `gorm:"column:status;not null;default:online;comment:状态:online/offline" json:"status"`           // 状态:online/offline
+	Remark            string         `gorm:"column:remark;not null;comment:备注" json:"remark"`                                         // 备注
+	CreatedAt         time.Time      `gorm:"column:created_at;comment:创建时间" json:"created_at"`                                        // 创建时间
+	UpdatedAt         time.Time      `gorm:"column:updated_at;comment:更新时间" json:"updated_at"`                                        // 更新时间
+	DeletedAt         gorm.DeletedAt `gorm:"column:deleted_at;comment:删除时间" json:"deleted_at"`                                        // 删除时间
 }
 
 // TableName RobotdogPtz's table name
