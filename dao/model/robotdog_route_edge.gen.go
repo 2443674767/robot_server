@@ -14,17 +14,17 @@ const TableNameRobotdogRouteEdge = "gf_robotdog_route_edge"
 
 // RobotdogRouteEdge 机械狗航线边
 type RobotdogRouteEdge struct {
-	ID             int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                      // ID
-	TenantID       int32          `gorm:"column:tenant_id;not null;default:1;comment:租户唯一标识" json:"tenant_id"`               // 租户唯一标识
-	RouteID        int64          `gorm:"column:route_id;not null;default:0;comment:航线ID" json:"route_id"`                   // 航线ID
-	FromWaypointID int64          `gorm:"column:from_waypoint_id;not null;default:0;comment:起点航点ID" json:"from_waypoint_id"` // 起点航点ID
-	ToWaypointID   int64          `gorm:"column:to_waypoint_id;not null;default:0;comment:终点航点ID" json:"to_waypoint_id"`     // 终点航点ID
-	FromTaskSeq    int32          `gorm:"column:from_task_seq;not null;default:0;comment:起点任务序号" json:"from_task_seq"`       // 起点任务序号
-	ToTaskSeq      int32          `gorm:"column:to_task_seq;not null;default:0;comment:终点任务序号" json:"to_task_seq"`           // 终点任务序号
-	EdgeSeq        int32          `gorm:"column:edge_seq;not null;default:0;comment:边排序" json:"edge_seq"`                    // 边排序
-	CreatedAt      time.Time      `gorm:"column:created_at;comment:创建时间" json:"created_at"`                                  // 创建时间
-	UpdatedAt      time.Time      `gorm:"column:updated_at;comment:更新时间" json:"updated_at"`                                  // 更新时间
-	DeletedAt      gorm.DeletedAt `gorm:"column:deleted_at;comment:删除时间" json:"deleted_at"`                                  // 删除时间
+	ID             int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`            // ID
+	TenantID       int32          `gorm:"column:tenant_id;not null;default:1;comment:租户唯一标识" json:"tenant_id"`     // 租户唯一标识
+	RouteID        int64          `gorm:"column:route_id;not null;comment:航线ID" json:"route_id"`                   // 航线ID
+	FromWaypointID int64          `gorm:"column:from_waypoint_id;not null;comment:起点航点ID" json:"from_waypoint_id"` // 起点航点ID
+	ToWaypointID   int64          `gorm:"column:to_waypoint_id;not null;comment:终点航点ID" json:"to_waypoint_id"`     // 终点航点ID
+	FromTaskSeq    int32          `gorm:"column:from_task_seq;not null;comment:起点任务序号" json:"from_task_seq"`       // 起点任务序号
+	ToTaskSeq      int32          `gorm:"column:to_task_seq;not null;comment:终点任务序号" json:"to_task_seq"`           // 终点任务序号
+	EdgeSeq        int32          `gorm:"column:edge_seq;not null;comment:边排序" json:"edge_seq"`                    // 边排序
+	CreatedAt      time.Time      `gorm:"column:created_at;comment:创建时间" json:"created_at"`                        // 创建时间
+	UpdatedAt      time.Time      `gorm:"column:updated_at;comment:更新时间" json:"updated_at"`                        // 更新时间
+	DeletedAt      gorm.DeletedAt `gorm:"column:deleted_at;comment:删除时间" json:"deleted_at"`                        // 删除时间
 }
 
 // TableName RobotdogRouteEdge's table name

@@ -180,6 +180,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		RobotdogMap:           q.RobotdogMap.replaceDB(db),
 		RobotdogPtz:           q.RobotdogPtz.replaceDB(db),
 		RobotdogRoute:         q.RobotdogRoute.replaceDB(db),
+		RobotdogRouteEdge:     q.RobotdogRouteEdge.replaceDB(db),
 		RobotdogRouteTask:     q.RobotdogRouteTask.replaceDB(db),
 		RobotdogRouteWaypoint: q.RobotdogRouteWaypoint.replaceDB(db),
 		RobotdogTask:          q.RobotdogTask.replaceDB(db),
@@ -205,6 +206,7 @@ type queryCtx struct {
 	RobotdogMap           IRobotdogMapDo
 	RobotdogPtz           IRobotdogPtzDo
 	RobotdogRoute         IRobotdogRouteDo
+	RobotdogRouteEdge     IRobotdogRouteEdgeDo
 	RobotdogRouteTask     IRobotdogRouteTaskDo
 	RobotdogRouteWaypoint IRobotdogRouteWaypointDo
 	RobotdogTask          IRobotdogTaskDo
@@ -230,6 +232,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		RobotdogMap:           q.RobotdogMap.WithContext(ctx),
 		RobotdogPtz:           q.RobotdogPtz.WithContext(ctx),
 		RobotdogRoute:         q.RobotdogRoute.WithContext(ctx),
+		RobotdogRouteEdge:     q.RobotdogRouteEdge.WithContext(ctx),
 		RobotdogRouteTask:     q.RobotdogRouteTask.WithContext(ctx),
 		RobotdogRouteWaypoint: q.RobotdogRouteWaypoint.WithContext(ctx),
 		RobotdogTask:          q.RobotdogTask.WithContext(ctx),
