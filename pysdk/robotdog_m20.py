@@ -106,6 +106,9 @@ class RobotUdpClient:
     def send_gait(self, gait: int) -> None:
         self.send_payload(2, 23, {"GaitParam": gait})
 
+    def send_charge(self, charge: int) -> None:
+        self.send_payload(2, 24, {"Charge": charge})
+
     def send_light(self, front: int, back: int) -> None:
         self.send_payload(1101, 2, {"Front": front, "Back": back})
 
@@ -334,6 +337,9 @@ def parse_args() -> argparse.Namespace:
             "gait-basic",
             "gait-stair",
             "gait-flat-fast",
+            "charge-enter",
+            "charge-exit",
+            "charge-clear",
             "light-on",
             "light-off",
         ]
@@ -402,6 +408,15 @@ def main() -> None:
             read_responses(client, 0.5)
         elif args.action == "gait-flat-fast":
             client.send_gait(0x3002)
+            read_responses(client, 0.5)
+        elif args.action == "charge-enter":
+            client.send_charge(1)
+            read_responses(client, 0.5)
+        elif args.action == "charge-exit":
+            client.send_charge(0)
+            read_responses(client, 0.5)
+        elif args.action == "charge-clear":
+            client.send_charge(2)
             read_responses(client, 0.5)
         elif args.action == "light-on":
             client.send_light(1, 1)
