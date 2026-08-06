@@ -1,6 +1,7 @@
 package preset
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -53,6 +54,11 @@ func stringValue(param map[string]interface{}, key string, def string) string {
 		}
 	}
 	return def
+}
+
+func hasParam(param map[string]interface{}, key string) bool {
+	_, ok := param[key]
+	return ok
 }
 
 func routeWaypointMap(ctx *gf.GinCtx, tenantID int32, routeIDs []int64) map[int64][]int64 {
@@ -216,15 +222,7 @@ func (api *Index) PtzMove(ctx *gf.GinCtx) {
 		gf.Failed().SetMsg("获取云台驱动失败").SetData(err).Regin(ctx)
 		return
 	}
-	target := internalcontrol.FillPTZTargetDefaults(internalcontrol.PTZTarget{
-		ID:       ptz.ID,
-		Name:     ptz.Name,
-		Brand:    ptz.Brand,
-		Model:    ptz.Model,
-		Protocol: strings.ToLower(ptz.Protocol),
-		UDPHost:  ptz.UdpHost,
-		UDPPort:  ptz.UdpPort,
-	})
+	target := internalcontrol.FillPTZTargetDefaults(ptzTarget(ptz))
 	moveOpts := internalcontrol.PTZMoveOptions{
 		Direction: command,
 		Speed:     gf.Float64(param["speed"]),
@@ -260,6 +258,17 @@ func (api *Index) PtzMove(ctx *gf.GinCtx) {
 		result, err = driver.FocusNear(ctx, target, focusOpts)
 	case "focus_far":
 		result, err = driver.FocusFar(ctx, target, focusOpts)
+	case "home":
+		result, err = driver.Home(ctx, target)
+	case "angle_set":
+		result, err = driver.SetAngle(ctx, target, internalcontrol.PTZAngleOptions{
+			Pan:      gf.Float64(param["pan"]),
+			Tilt:     gf.Float64(param["tilt"]),
+			Roll:     gf.Float64(param["roll"]),
+			Duration: gf.Int(param["duration"]),
+		})
+	case "photo":
+		result, err = driver.TakePhoto(ctx, target, photoOptions(param))
 	case "stop":
 		result, err = driver.Stop(ctx, target)
 	default:
@@ -274,6 +283,89 @@ func (api *Index) PtzMove(ctx *gf.GinCtx) {
 	gf.Success().SetMsg("云台UDP指令已发送").SetData(result).Regin(ctx)
 }
 
+func (api *Index) PtzPhoto(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	tenant := tenantID(ctx, param)
+	ptz, err := findPTZ(ctx, param)
+	if err != nil {
+		gf.Failed().SetMsg("云台不存在").SetData(err).Regin(ctx)
+		return
+	}
+	driver, driverName, err := internalcontrol.PTZDriver(ptz.Model)
+	if err != nil {
+		gf.Failed().SetMsg("获取云台驱动失败").SetData(err).Regin(ctx)
+		return
+	}
+	opts := photoOptions(param)
+	result, err := driver.TakePhoto(ctx, internalcontrol.FillPTZTargetDefaults(ptzTarget(ptz)), opts)
+	if err != nil {
+		gf.Failed().SetMsg("云台拍照失败: " + err.Error()).SetData(map[string]interface{}{"error": err.Error()}).Regin(ctx)
+		return
+	}
+	result.Driver = driverName
+	rawData, _ := json.Marshal(result)
+	now := time.Now()
+	filePath := photoFilePath(opts.Folder, opts.Filename)
+	photo := &model.RobotdogPtzPhoto{
+		TenantID:   tenant,
+		WaypointID: gf.Int64(param["waypoint_id"]),
+		PtzID:      ptz.ID,
+		Filename:   opts.Filename,
+		FilePath:   filePath,
+		Mode:       opts.Mode,
+		RawData:    string(rawData),
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+	if err := dao.DB().WithContext(ctx).Create(photo).Error; err != nil {
+		gf.Failed().SetMsg("保存云台拍照记录失败").SetData(err).Regin(ctx)
+		return
+	}
+	gf.Success().SetMsg("拍照成功").SetData(photoResponse(photo)).Regin(ctx)
+}
+
+func (api *Index) PtzPhotoList(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	tenant := tenantID(ctx, param)
+	offset, limit := pageArgs(param)
+	db := dao.DB().WithContext(ctx).Model(&model.RobotdogPtzPhoto{}).Where("tenant_id = ? AND deleted_at IS NULL", tenant)
+	if waypointID := gf.Int64(param["waypoint_id"]); waypointID > 0 {
+		db = db.Where("waypoint_id = ?", waypointID)
+	}
+	if ptzID := gf.Int64(param["ptz_id"]); ptzID > 0 {
+		db = db.Where("ptz_id = ?", ptzID)
+	}
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		gf.Failed().SetMsg("获取云台拍照记录总数失败").SetData(err).Regin(ctx)
+		return
+	}
+	var list []model.RobotdogPtzPhoto
+	if err := db.Order("id DESC").Offset(offset).Limit(limit).Find(&list).Error; err != nil {
+		gf.Failed().SetMsg("获取云台拍照记录列表失败").SetData(err).Regin(ctx)
+		return
+	}
+	rows := make([]map[string]interface{}, 0, len(list))
+	for i := range list {
+		rows = append(rows, photoResponse(&list[i]))
+	}
+	gf.Success().SetMsg("获取云台拍照记录列表").SetData(map[string]interface{}{"list": rows, "total": total}).Regin(ctx)
+}
+
+func (api *Index) PtzPhotoDel(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	id := gf.Int64(param["id"])
+	if id == 0 {
+		gf.Failed().SetMsg("云台拍照记录ID不能为空").Regin(ctx)
+		return
+	}
+	if err := dao.DB().WithContext(ctx).Where("id = ? AND tenant_id = ?", id, tenantID(ctx, param)).Delete(&model.RobotdogPtzPhoto{}).Error; err != nil {
+		gf.Failed().SetMsg("删除云台拍照记录失败").SetData(err).Regin(ctx)
+		return
+	}
+	gf.Success().SetMsg("删除云台拍照记录成功").SetData(nil).Regin(ctx)
+}
+
 func (api *Index) PtzGetRealtime(ctx *gf.GinCtx) {
 	param, _ := gf.RequestParam(ctx)
 	ptz, err := findPTZ(ctx, param)
@@ -286,21 +378,240 @@ func (api *Index) PtzGetRealtime(ctx *gf.GinCtx) {
 		gf.Failed().SetMsg("获取云台驱动失败").SetData(err).Regin(ctx)
 		return
 	}
-	data, err := driver.Realtime(ctx, internalcontrol.FillPTZTargetDefaults(internalcontrol.PTZTarget{
-		ID:       ptz.ID,
-		Name:     ptz.Name,
-		Brand:    ptz.Brand,
-		Model:    ptz.Model,
-		Protocol: strings.ToLower(ptz.Protocol),
-		UDPHost:  ptz.UdpHost,
-		UDPPort:  ptz.UdpPort,
-	}))
+	data, err := driver.Realtime(ctx, internalcontrol.FillPTZTargetDefaults(ptzTarget(ptz)))
 	if err != nil {
-		gf.Failed().SetMsg("获取云台实时数据失败").SetData(err).Regin(ctx)
+		gf.Failed().SetMsg("无法获取云台实时姿态").SetData(err).Regin(ctx)
 		return
 	}
 	data.Driver = driverName
 	gf.Success().SetMsg("获取云台实时数据").SetData(data).Regin(ctx)
+}
+
+func (api *Index) PtzSetPreset(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	tenant := tenantID(ctx, param)
+	waypointID := gf.Int64(param["waypoint_id"])
+	if waypointID == 0 {
+		gf.Failed().SetMsg("航点ID不能为空").Regin(ctx)
+		return
+	}
+	waypoint, err := dao.Query().RobotdogWaypoint.WithContext(ctx).Where(dao.Query().RobotdogWaypoint.ID.Eq(waypointID), dao.Query().RobotdogWaypoint.TenantID.Eq(tenant)).First()
+	if err != nil {
+		gf.Failed().SetMsg("特殊航点不存在").SetData(err).Regin(ctx)
+		return
+	}
+	if waypoint.IsTask != 1 {
+		gf.Failed().SetMsg("当前航点不是任务航点").Regin(ctx)
+		return
+	}
+	if gf.Int64(param["ptz_id"]) == 0 && waypoint.DogID > 0 {
+		param["dog_id"] = waypoint.DogID
+	}
+	ptz, err := findPTZ(ctx, param)
+	if err != nil {
+		gf.Failed().SetMsg("云台不存在").SetData(err).Regin(ctx)
+		return
+	}
+	driver, _, err := internalcontrol.PTZDriver(ptz.Model)
+	if err != nil {
+		gf.Failed().SetMsg("获取云台驱动失败").SetData(err).Regin(ctx)
+		return
+	}
+	realtime, err := driver.Realtime(ctx, internalcontrol.FillPTZTargetDefaults(ptzTarget(ptz)))
+	if err != nil {
+		gf.Failed().SetMsg("无法获取云台实时姿态").SetData(err).Regin(ctx)
+		return
+	}
+	if realtime.Pitch == nil || realtime.Yaw == nil || realtime.Roll == nil {
+		gf.Failed().SetMsg("无法获取云台实时姿态").SetData(realtime).Regin(ctx)
+		return
+	}
+	servoPhoto, ok := optionalBinaryInt8(param, "servo_photo")
+	if !ok {
+		gf.Failed().SetMsg("配置值无效").Regin(ctx)
+		return
+	}
+	autoHome, ok := optionalBinaryInt8(param, "auto_home")
+	if !ok {
+		gf.Failed().SetMsg("配置值无效").Regin(ctx)
+		return
+	}
+	rawData, _ := json.Marshal(realtime)
+	now := time.Now()
+	preset := &model.RobotdogPtzPreset{
+		TenantID:   tenant,
+		WaypointID: waypointID,
+		PtzID:      ptz.ID,
+		Name:       stringValue(param, "name", fmt.Sprintf("航点%d云台预置位", waypointID)),
+		SortNo:     positiveInt32(gf.Int32(param["sort_no"]), 1),
+		ServoPhoto: servoPhoto,
+		AutoHome:   autoHome,
+		Pitch:      ptrFloat64Value(realtime.Pitch),
+		Yaw:        ptrFloat64Value(realtime.Yaw),
+		Roll:       ptrFloat64Value(realtime.Roll),
+		Zoom:       ptrFloat64Value(realtime.Zoom),
+		Focus:      realtime.Focus,
+		RawData:    string(rawData),
+		Remark:     stringValue(param, "remark", ""),
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+	if id := gf.Int64(param["id"]); id > 0 {
+		preset.ID = id
+		res := dao.DB().WithContext(ctx).Model(&model.RobotdogPtzPreset{}).Where("id = ? AND tenant_id = ?", id, tenant).Updates(presetFullUpdates(preset, now))
+		if res.Error != nil {
+			gf.Failed().SetMsg("更新云台预置位失败").SetData(res.Error).Regin(ctx)
+			return
+		}
+		if res.RowsAffected == 0 {
+			gf.Failed().SetMsg("预置位不存在").Regin(ctx)
+			return
+		}
+		if err := dao.DB().WithContext(ctx).Where("id = ? AND tenant_id = ?", id, tenant).First(preset).Error; err != nil {
+			gf.Failed().SetMsg("获取云台预置位失败").SetData(err).Regin(ctx)
+			return
+		}
+		gf.Success().SetMsg("保存云台预置位成功").SetData(preset).Regin(ctx)
+		return
+	}
+	var existing model.RobotdogPtzPreset
+	if err := dao.DB().WithContext(ctx).Where("tenant_id = ? AND waypoint_id = ? AND deleted_at IS NULL", tenant, waypointID).Order("id ASC").First(&existing).Error; err == nil {
+		preset.ID = existing.ID
+		if err := dao.DB().WithContext(ctx).Model(&model.RobotdogPtzPreset{}).Where("id = ? AND tenant_id = ?", existing.ID, tenant).Updates(presetFullUpdates(preset, now)).Error; err != nil {
+			gf.Failed().SetMsg("更新云台预置位失败").SetData(err).Regin(ctx)
+			return
+		}
+		if err := dao.DB().WithContext(ctx).Where("id = ? AND tenant_id = ?", existing.ID, tenant).First(preset).Error; err != nil {
+			gf.Failed().SetMsg("获取云台预置位失败").SetData(err).Regin(ctx)
+			return
+		}
+		gf.Success().SetMsg("保存云台预置位成功").SetData(preset).Regin(ctx)
+		return
+	}
+	if err := dao.DB().WithContext(ctx).Create(preset).Error; err != nil {
+		gf.Failed().SetMsg("保存云台预置位失败").SetData(err).Regin(ctx)
+		return
+	}
+	gf.Success().SetMsg("保存云台预置位成功").SetData(preset).Regin(ctx)
+}
+
+func presetFullUpdates(preset *model.RobotdogPtzPreset, now time.Time) map[string]interface{} {
+	return map[string]interface{}{
+		"waypoint_id":  preset.WaypointID,
+		"ptz_id":       preset.PtzID,
+		"name":         preset.Name,
+		"sort_no":      preset.SortNo,
+		"servo_photo":  preset.ServoPhoto,
+		"auto_home":    preset.AutoHome,
+		"pitch":        preset.Pitch,
+		"yaw":          preset.Yaw,
+		"roll":         preset.Roll,
+		"zoom":         preset.Zoom,
+		"focus_status": preset.Focus,
+		"raw_data":     preset.RawData,
+		"remark":       preset.Remark,
+		"updated_at":   now,
+		"deleted_at":   nil,
+	}
+}
+
+func (api *Index) PtzPresetList(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	tenant := tenantID(ctx, param)
+	offset, limit := pageArgs(param)
+	db := dao.DB().WithContext(ctx).Model(&model.RobotdogPtzPreset{}).Where("tenant_id = ? AND deleted_at IS NULL", tenant)
+	if id := gf.Int64(param["id"]); id > 0 {
+		db = db.Where("id = ?", id)
+	}
+	if waypointID := gf.Int64(param["waypoint_id"]); waypointID > 0 {
+		db = db.Where("waypoint_id = ?", waypointID)
+	}
+	if ptzID := gf.Int64(param["ptz_id"]); ptzID > 0 {
+		db = db.Where("ptz_id = ?", ptzID)
+	}
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		gf.Failed().SetMsg("获取云台预置位总数失败").SetData(err).Regin(ctx)
+		return
+	}
+	var list []model.RobotdogPtzPreset
+	if err := db.Order("sort_no ASC, id ASC").Offset(offset).Limit(limit).Find(&list).Error; err != nil {
+		gf.Failed().SetMsg("获取云台预置位列表失败").SetData(err).Regin(ctx)
+		return
+	}
+	gf.Success().SetMsg("获取云台预置位列表").SetData(map[string]interface{}{"list": list, "total": total}).Regin(ctx)
+}
+
+func (api *Index) PtzPresetDetail(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	id := gf.Int64(param["id"])
+	if id == 0 {
+		gf.Failed().SetMsg("预置位ID不能为空").Regin(ctx)
+		return
+	}
+	var preset model.RobotdogPtzPreset
+	if err := dao.DB().WithContext(ctx).Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID(ctx, param)).First(&preset).Error; err != nil {
+		gf.Failed().SetMsg("预置位不存在").SetData(err).Regin(ctx)
+		return
+	}
+	gf.Success().SetMsg("获取云台预置位详情").SetData(preset).Regin(ctx)
+}
+
+func (api *Index) PtzUpdatePresetBase(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	id := gf.Int64(param["id"])
+	if id == 0 {
+		gf.Failed().SetMsg("预置位ID不能为空").Regin(ctx)
+		return
+	}
+	if !hasParam(param, "servo_photo") || !hasParam(param, "auto_home") {
+		gf.Failed().SetMsg("配置值无效").Regin(ctx)
+		return
+	}
+	servoPhoto, ok := validBinaryInt8(param["servo_photo"])
+	if !ok {
+		gf.Failed().SetMsg("配置值无效").Regin(ctx)
+		return
+	}
+	autoHome, ok := validBinaryInt8(param["auto_home"])
+	if !ok {
+		gf.Failed().SetMsg("配置值无效").Regin(ctx)
+		return
+	}
+	tenant := tenantID(ctx, param)
+	res := dao.DB().WithContext(ctx).Model(&model.RobotdogPtzPreset{}).Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenant).Updates(map[string]interface{}{
+		"servo_photo": servoPhoto,
+		"auto_home":   autoHome,
+		"updated_at":  time.Now(),
+	})
+	if res.Error != nil {
+		gf.Failed().SetMsg("更新预置位基础配置失败").SetData(res.Error).Regin(ctx)
+		return
+	}
+	if res.RowsAffected == 0 {
+		gf.Failed().SetMsg("预置位不存在").Regin(ctx)
+		return
+	}
+	var preset model.RobotdogPtzPreset
+	if err := dao.DB().WithContext(ctx).Where("id = ? AND tenant_id = ?", id, tenant).First(&preset).Error; err != nil {
+		gf.Failed().SetMsg("获取云台预置位失败").SetData(err).Regin(ctx)
+		return
+	}
+	gf.Success().SetMsg("更新预置位基础配置成功").SetData(preset).Regin(ctx)
+}
+
+func (api *Index) PtzPresetDel(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	id := gf.Int64(param["id"])
+	if id == 0 {
+		gf.Failed().SetMsg("云台预置位ID不能为空").Regin(ctx)
+		return
+	}
+	if err := dao.DB().WithContext(ctx).Where("id = ? AND tenant_id = ?", id, tenantID(ctx, param)).Delete(&model.RobotdogPtzPreset{}).Error; err != nil {
+		gf.Failed().SetMsg("删除云台预置位失败").SetData(err).Regin(ctx)
+		return
+	}
+	gf.Success().SetMsg("删除云台预置位成功").SetData(nil).Regin(ctx)
 }
 
 func (api *Index) GotoWaypoint(ctx *gf.GinCtx) {
@@ -344,7 +655,34 @@ func findPTZ(ctx *gf.GinCtx, param map[string]interface{}) (*model.RobotdogPtz, 
 	if ptzID := gf.Int64(param["ptz_id"]); ptzID > 0 {
 		return ptzDB.WithContext(ctx).Where(ptzDB.ID.Eq(ptzID), ptzDB.TenantID.Eq(tenant)).First()
 	}
+	if dogID := gf.Int64(param["dog_id"]); dogID > 0 {
+		dogDB := dao.Query().RobotdogDog
+		if dog, err := dogDB.WithContext(ctx).Where(dogDB.ID.Eq(dogID), dogDB.TenantID.Eq(tenant)).First(); err == nil && dog.PtzID > 0 {
+			return ptzDB.WithContext(ctx).Where(ptzDB.ID.Eq(dog.PtzID), ptzDB.TenantID.Eq(tenant)).First()
+		}
+	}
 	return ptzDB.WithContext(ctx).Where(ptzDB.TenantID.Eq(tenant), ptzDB.Status.Eq("online")).Order(ptzDB.ID.Asc()).First()
+}
+
+func ptzTarget(ptz *model.RobotdogPtz) internalcontrol.PTZTarget {
+	return internalcontrol.PTZTarget{
+		ID:                ptz.ID,
+		Name:              ptz.Name,
+		DeviceUID:         ptz.DeviceUID,
+		Username:          ptz.Username,
+		Password:          ptz.Password,
+		Brand:             ptz.Brand,
+		Model:             ptz.Model,
+		Protocol:          strings.ToLower(ptz.Protocol),
+		UDPHost:           firstNonEmpty(ptz.UdpHost, ptz.IPAddr),
+		UDPPort:           ptz.UdpPort,
+		LocalPort:         ptz.LocalPort,
+		TargetSystemID:    byte(ptz.TargetSystemID),
+		TargetComponentID: byte(ptz.TargetComponentID),
+		SourceSystemID:    byte(ptz.SourceSystemID),
+		SourceComponentID: byte(ptz.SourceComponentID),
+		RTSPURL:           ptz.RTSPURL,
+	}
 }
 
 func normalizePTZCommand(v string) string {
@@ -366,11 +704,93 @@ func normalizePTZCommand(v string) string {
 		return "focus_near"
 	case "focus_far", "focusfar", "focus-":
 		return "focus_far"
+	case "home", "center", "reset", "zero":
+		return "home"
+	case "angle_set", "angleset", "set_angle":
+		return "angle_set"
+	case "photo", "take_photo", "capture":
+		return "photo"
 	case "stop", "halt":
 		return "stop"
 	default:
 		return v
 	}
+}
+
+func photoOptions(param map[string]interface{}) internalcontrol.PhotoOptions {
+	folder := stringValue(param, "folder", "robotdog_ptz")
+	filename := stringValue(param, "filename", "")
+	if filename == "" {
+		filename = "ptz_" + time.Now().Format("20060102150405") + ".jpg"
+	}
+	return internalcontrol.PhotoOptions{
+		Mode:     stringValue(param, "mode", "default"),
+		Folder:   folder,
+		Filename: filename,
+	}
+}
+
+func photoResponse(photo *model.RobotdogPtzPhoto) map[string]interface{} {
+	filePath := "/" + strings.TrimLeft(photo.FilePath, "/")
+	return map[string]interface{}{
+		"id":          photo.ID,
+		"tenant_id":   photo.TenantID,
+		"waypoint_id": photo.WaypointID,
+		"ptz_id":      photo.PtzID,
+		"filename":    photo.Filename,
+		"file_path":   filePath,
+		"url":         gf.GetFullUrl(filePath),
+		"mode":        photo.Mode,
+		"raw_data":    photo.RawData,
+		"created_at":  photo.CreatedAt,
+	}
+}
+
+func photoFilePath(folder string, filename string) string {
+	folder = strings.Trim(folder, "/")
+	filename = strings.Trim(filename, "/")
+	if folder == "" {
+		folder = "robotdog_ptz"
+	}
+	return "resource/uploads/" + folder + "/" + filename
+}
+
+func positiveInt32(v int32, fallback int32) int32 {
+	if v > 0 {
+		return v
+	}
+	return fallback
+}
+
+func optionalBinaryInt8(param map[string]interface{}, key string) (int8, bool) {
+	if !hasParam(param, key) {
+		return 0, true
+	}
+	return validBinaryInt8(param[key])
+}
+
+func validBinaryInt8(v interface{}) (int8, bool) {
+	n := gf.Int8(v)
+	if n == 0 || n == 1 {
+		return n, true
+	}
+	return 0, false
+}
+
+func ptrFloat64Value(v *float64) float64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func firstPositiveFloat(values ...float64) float64 {
