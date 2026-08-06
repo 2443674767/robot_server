@@ -25,6 +25,7 @@ type RobotdogDog struct {
 	StreamURL string         `gorm:"column:stream_url;not null;comment:视频播放地址" json:"stream_url"`                         // 视频播放地址
 	RtspURL   string         `gorm:"column:rtsp_url;not null;comment:RTSP地址" json:"rtsp_url"`                             // RTSP地址
 	MapID     int64          `gorm:"column:map_id;not null;comment:默认地图ID" json:"map_id"`                                 // 默认地图ID
+	PtzID     int64          `gorm:"column:ptz_id;not null;default:0;comment:绑定云台ID" json:"ptz_id"`                       // 绑定云台ID
 	UdpHost   string         `gorm:"column:udp_host;not null;comment:UDP主机地址" json:"udp_host"`                            // UDP主机地址
 	UdpPort   int32          `gorm:"column:udp_port;not null;comment:UDP端口" json:"udp_port"`                              // UDP端口
 	Remark    string         `gorm:"column:remark;not null;comment:备注" json:"remark"`                                     // 备注
