@@ -19,9 +19,14 @@ func buildFrame(device byte, command byte, value byte, duration uint16) []byte {
 
 func init() {
 	pythonDog := NewPythonDogDriver()
+	pythonPTZ := NewPythonPTZDriver()
 	RegisterDogDriver("default", pythonDog)
 	RegisterDogDriver("m20", pythonDog)
 	RegisterDogDriver("yunshenchu_m20", pythonDog)
 	RegisterDogDriver("云深处m20", pythonDog)
-	RegisterPTZDriver("default", NewDefaultPTZDriver())
+	RegisterPTZDriver("default", pythonPTZ)
+	RegisterPTZDriver("hy", pythonPTZ)
+	RegisterPTZDriver("hy-dz230f", pythonPTZ)
+	RegisterPTZDriver("hy_dz230f", pythonPTZ)
+	RegisterPTZDriver("汇云", pythonPTZ)
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -20,11 +21,12 @@ type PythonDogDriver struct {
 }
 
 func NewPythonDogDriver() *PythonDogDriver {
+	cfg := LoadUDPConfig()
 	return &PythonDogDriver{
 		Name:       "yunshenchu_m20_python",
 		ScriptPath: "pysdk/robotdog_m20.py",
 		PythonBin:  envDefault("ROBOTDOG_PYTHON_BIN", "python3"),
-		LocalPort:  envDefault("ROBOTDOG_PYSDK_LOCAL_PORT", "30002"),
+		LocalPort:  envDefault("ROBOTDOG_PYSDK_LOCAL_PORT", cfg.DogLocalPort),
 	}
 }
 
@@ -48,27 +50,64 @@ func (d *PythonDogDriver) Stop(ctx context.Context, target DogTarget) (*CommandR
 	return d.run(ctx, target, "stop", MoveOptions{})
 }
 
+func (d *PythonDogDriver) SetGait(ctx context.Context, target DogTarget, gait string) (*CommandResult, error) {
+	switch strings.TrimSpace(strings.ToLower(gait)) {
+	case "basic":
+		return d.run(ctx, target, "gait-basic", MoveOptions{})
+	case "stair":
+		return d.run(ctx, target, "gait-stair", MoveOptions{})
+	default:
+		return nil, fmt.Errorf("不支持的步态类型")
+	}
+}
+
+func (d *PythonDogDriver) Charge(ctx context.Context, target DogTarget, action string) (*CommandResult, error) {
+	switch strings.TrimSpace(strings.ToLower(action)) {
+	case "enter":
+		return d.run(ctx, target, "charge-enter", MoveOptions{})
+	case "exit":
+		return d.run(ctx, target, "charge-exit", MoveOptions{})
+	case "clear":
+		return d.run(ctx, target, "charge-clear", MoveOptions{})
+	default:
+		return nil, fmt.Errorf("不支持的充电桩动作")
+	}
+}
+
 func (d *PythonDogDriver) Realtime(ctx context.Context, target DogTarget) (*RealtimeData, error) {
+	target = FillDogTargetDefaults(target)
 	output, elapsed, err := d.execScript(ctx, target, "status", 0, 1)
 	if err != nil {
 		return nil, err
+	}
+	battery, navStatus := parseDogRealtimeOutput(output)
+	data := map[string]interface{}{
+		"model":    target.Model,
+		"udp_host": target.UDPHost,
+		"udp_port": target.UDPPort,
+		"elapsed":  elapsed.String(),
+		"output":   output,
+	}
+	if battery != nil {
+		data["battery"] = *battery
+	}
+	if navStatus != "" {
+		data["nav_status"] = navStatus
+		data["control_status"] = navStatus
 	}
 	return &RealtimeData{
 		DeviceType: "dog",
 		TargetID:   target.ID,
 		Driver:     d.Name,
 		At:         time.Now(),
-		Data: map[string]interface{}{
-			"model":    target.Model,
-			"udp_host": target.UDPHost,
-			"udp_port": target.UDPPort,
-			"elapsed":  elapsed.String(),
-			"output":   output,
-		},
+		Battery:    battery,
+		NavStatus:  navStatus,
+		Data:       data,
 	}, nil
 }
 
 func (d *PythonDogDriver) run(ctx context.Context, target DogTarget, action string, opts MoveOptions) (*CommandResult, error) {
+	target = FillDogTargetDefaults(target)
 	speed := normalizePythonSpeed(opts.Speed)
 	duration := normalizePythonDuration(opts.Duration)
 	if action == "stop" {
@@ -95,6 +134,7 @@ func (d *PythonDogDriver) run(ctx context.Context, target DogTarget, action stri
 }
 
 func (d *PythonDogDriver) execScript(ctx context.Context, target DogTarget, action string, speed float64, duration float64) (string, time.Duration, error) {
+	target = FillDogTargetDefaults(target)
 	if target.UDPHost == "" || target.UDPPort == 0 {
 		return "", 0, fmt.Errorf("机械狗UDP地址未配置")
 	}
@@ -206,4 +246,59 @@ func envDefault(key string, def string) string {
 		return v
 	}
 	return def
+}
+
+func parseDogRealtimeOutput(output string) (*int, string) {
+	battery := parseDogBattery(output)
+	mode := firstRealtimeLabel(output, `ControlUsageMode[^\n:]*:\s*[^\(\n]*\(([^)]+)\)`)
+	motion := firstRealtimeLabel(output, `MotionState[^\n:]*:\s*[^\(\n]*\(([^)]+)\)`)
+	navStatus := strings.TrimSpace(strings.Join(nonEmptyStrings(mode, motion), " "))
+	return battery, navStatus
+}
+
+func parseDogBattery(output string) *int {
+	matches := regexp.MustCompile(`BatteryLevel(?:Left|Right)?[^\n:]*:\s*([0-9]+(?:\.[0-9]+)?)%?`).FindAllStringSubmatch(output, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	minValue := 101
+	for _, match := range matches {
+		value, err := strconv.ParseFloat(match[1], 64)
+		if err != nil {
+			continue
+		}
+		n := int(value + 0.5)
+		if n < minValue {
+			minValue = n
+		}
+	}
+	if minValue < 0 {
+		minValue = 0
+	}
+	if minValue > 100 {
+		minValue = 100
+	}
+	if minValue == 101 {
+		return nil
+	}
+	return &minValue
+}
+
+func firstRealtimeLabel(output string, pattern string) string {
+	match := regexp.MustCompile(pattern).FindStringSubmatch(output)
+	if len(match) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(match[1])
+}
+
+func nonEmptyStrings(values ...string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" && value != "未知" {
+			result = append(result, value)
+		}
+	}
+	return result
 }

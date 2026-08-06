@@ -35,6 +35,30 @@ func (d *DefaultDogDriver) Stop(ctx context.Context, target DogTarget) (*Command
 	return d.send(ctx, target, "stop", buildFrame(0x01, 0x00, 0, 0))
 }
 
+func (d *DefaultDogDriver) SetGait(ctx context.Context, target DogTarget, gait string) (*CommandResult, error) {
+	switch gait {
+	case "basic":
+		return d.send(ctx, target, "gait-basic", buildFrame(0x01, 0x23, 0x01, 0x1001))
+	case "stair":
+		return d.send(ctx, target, "gait-stair", buildFrame(0x01, 0x23, 0x03, 0x1003))
+	default:
+		return nil, fmt.Errorf("不支持的步态类型")
+	}
+}
+
+func (d *DefaultDogDriver) Charge(ctx context.Context, target DogTarget, action string) (*CommandResult, error) {
+	switch action {
+	case "enter":
+		return d.send(ctx, target, "charge-enter", buildFrame(0x01, 0x24, 1, 0))
+	case "exit":
+		return d.send(ctx, target, "charge-exit", buildFrame(0x01, 0x24, 0, 0))
+	case "clear":
+		return d.send(ctx, target, "charge-clear", buildFrame(0x01, 0x24, 2, 0))
+	default:
+		return nil, fmt.Errorf("不支持的充电桩动作")
+	}
+}
+
 func (d *DefaultDogDriver) Realtime(ctx context.Context, target DogTarget) (*RealtimeData, error) {
 	return &RealtimeData{
 		DeviceType: "dog",
