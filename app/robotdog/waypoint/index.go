@@ -57,6 +57,15 @@ func stringValue(param map[string]interface{}, key string, def string) string {
 	return def
 }
 
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func idList(v interface{}) []int64 {
 	ids := gf.InterfaceToInt64(v)
 	out := make([]int64, 0, len(ids))
@@ -201,6 +210,16 @@ func routeEdgesFromNavigateRefs(tenantID int32, routeID int64, refs []navigateWa
 	return edges
 }
 
+func waypointIDsFromNavigateRefs(refs []navigateWaypointRef) []int64 {
+	ids := make([]int64, 0, len(refs))
+	for _, ref := range refs {
+		if ref.WaypointID > 0 {
+			ids = append(ids, ref.WaypointID)
+		}
+	}
+	return ids
+}
+
 func validateRouteEdgeWaypoints(tx *gorm.DB, tenantID int32, refs []navigateWaypointRef) error {
 	seen := make(map[int64]struct{}, len(refs))
 	ids := make([]int64, 0, len(refs))
@@ -293,6 +312,83 @@ func routeWaypointMap(ctx *gf.GinCtx, tenantID int32, routeIDs []int64) map[int6
 	return result
 }
 
+func routeWaypointBriefMap(ctx *gf.GinCtx, tenantID int32, routeIDs []int64) map[int64][]map[string]interface{} {
+	if len(routeIDs) == 0 {
+		return map[int64][]map[string]interface{}{}
+	}
+	idsMap := routeWaypointMap(ctx, tenantID, routeIDs)
+	seen := map[int64]struct{}{}
+	waypointIDs := make([]int64, 0)
+	for _, ids := range idsMap {
+		for _, id := range ids {
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			waypointIDs = append(waypointIDs, id)
+		}
+	}
+	if len(waypointIDs) == 0 {
+		return map[int64][]map[string]interface{}{}
+	}
+	wpDB := dao.Query().RobotdogWaypoint
+	rows, err := wpDB.WithContext(ctx).Where(wpDB.TenantID.Eq(tenantID), wpDB.ID.In(waypointIDs...)).Find()
+	if err != nil {
+		return map[int64][]map[string]interface{}{}
+	}
+	wpMap := make(map[int64]*model.RobotdogWaypoint, len(rows))
+	for _, row := range rows {
+		wpMap[row.ID] = row
+	}
+	presetMap := waypointPresetIDMap(ctx, tenantID, waypointIDs)
+	briefResult := make(map[int64][]map[string]interface{}, len(idsMap))
+	for routeID, ids := range idsMap {
+		list := make([]map[string]interface{}, 0, len(ids))
+		for i, id := range ids {
+			waypoint, ok := wpMap[id]
+			if !ok {
+				continue
+			}
+			var presetID interface{}
+			if waypoint.IsTask == 1 {
+				if id := presetMap[waypoint.ID]; id > 0 {
+					presetID = id
+				}
+			}
+			list = append(list, map[string]interface{}{
+				"seq":       i + 1,
+				"id":        waypoint.ID,
+				"name":      waypoint.Name,
+				"is_task":   waypoint.IsTask,
+				"preset_id": presetID,
+			})
+		}
+		briefResult[routeID] = list
+	}
+	return briefResult
+}
+
+func waypointPresetIDMap(ctx *gf.GinCtx, tenantID int32, waypointIDs []int64) map[int64]int64 {
+	result := make(map[int64]int64)
+	if len(waypointIDs) == 0 {
+		return result
+	}
+	var presets []model.RobotdogPtzPreset
+	if err := dao.DB().WithContext(ctx).
+		Where("tenant_id = ? AND waypoint_id IN ? AND deleted_at IS NULL", tenantID, waypointIDs).
+		Order("sort_no ASC, id ASC").
+		Find(&presets).Error; err != nil {
+		return result
+	}
+	for _, preset := range presets {
+		if _, ok := result[preset.WaypointID]; ok {
+			continue
+		}
+		result[preset.WaypointID] = preset.ID
+	}
+	return result
+}
+
 func routeEdgeMap(ctx *gf.GinCtx, tenantID int32, routeIDs []int64) map[int64][]map[string]interface{} {
 	result := make(map[int64][]map[string]interface{})
 	if len(routeIDs) == 0 {
@@ -349,6 +445,27 @@ func routeListData(ctx *gf.GinCtx, tenantID int32, routes []*model.RobotdogRoute
 	return list
 }
 
+func routeWaypointAllData(ctx *gf.GinCtx, tenantID int32, routes []*model.RobotdogRoute) []map[string]interface{} {
+	ids := make([]int64, 0, len(routes))
+	for _, route := range routes {
+		ids = append(ids, route.ID)
+	}
+	wpBriefMap := routeWaypointBriefMap(ctx, tenantID, ids)
+	list := make([]map[string]interface{}, 0, len(routes))
+	for _, route := range routes {
+		waypoints := wpBriefMap[route.ID]
+		if waypoints == nil {
+			waypoints = []map[string]interface{}{}
+		}
+		list = append(list, map[string]interface{}{
+			"route_id":   route.ID,
+			"route_name": route.Name,
+			"waypoints":  waypoints,
+		})
+	}
+	return list
+}
+
 func (api *Index) GetList(ctx *gf.GinCtx) {
 	param, _ := gf.RequestParam(ctx)
 	dogDB := dao.Query().RobotdogDog
@@ -389,6 +506,7 @@ func (api *Index) Save(ctx *gf.GinCtx) {
 			StreamURL: stringValue(param, "stream_url", ""),
 			RtspURL:   stringValue(param, "rtsp_url", ""),
 			MapID:     gf.Int64(param["map_id"]),
+			PtzID:     gf.Int64(param["ptz_id"]),
 			UdpHost:   stringValue(param, "udp_host", ""),
 			UdpPort:   gf.Int32(param["udp_port"]),
 			Remark:    stringValue(param, "remark", ""),
@@ -416,6 +534,7 @@ func (api *Index) Save(ctx *gf.GinCtx) {
 		"stream_url": stringValue(param, "stream_url", ""),
 		"rtsp_url":   stringValue(param, "rtsp_url", ""),
 		"map_id":     gf.Int64(param["map_id"]),
+		"ptz_id":     gf.Int64(param["ptz_id"]),
 		"udp_host":   stringValue(param, "udp_host", ""),
 		"udp_port":   gf.Int32(param["udp_port"]),
 		"remark":     stringValue(param, "remark", ""),
@@ -474,6 +593,9 @@ func (api *Index) GetWaypointList(ctx *gf.GinCtx) {
 	if name := stringValue(param, "name", ""); name != "" {
 		where = append(where, wpDB.Name.Like("%"+name+"%"))
 	}
+	if hasParam(param, "is_task") {
+		where = append(where, wpDB.IsTask.Eq(gf.Int8(param["is_task"])))
+	}
 	offset, limit := pageArgs(param)
 	list, total, err := wpDB.WithContext(ctx).Where(where...).Order(wpDB.ID.Desc()).FindByPage(offset, limit)
 	if err != nil {
@@ -481,6 +603,40 @@ func (api *Index) GetWaypointList(ctx *gf.GinCtx) {
 		return
 	}
 	gf.Success().SetMsg("获取航点列表").SetData(map[string]interface{}{"list": list, "total": total}).Regin(ctx)
+}
+
+func (api *Index) GetRouteWaypointAll(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	tenant := tenantID(ctx, param)
+	routeDB := dao.Query().RobotdogRoute
+	routeWhere := []dao.Condition{routeDB.TenantID.Eq(tenant)}
+	if routeID := gf.Int64(param["route_id"]); routeID > 0 {
+		routeWhere = append(routeWhere, routeDB.ID.Eq(routeID))
+	} else if routeID := gf.Int64(param["id"]); routeID > 0 {
+		routeWhere = append(routeWhere, routeDB.ID.Eq(routeID))
+	}
+	if dogID := gf.Int64(param["dog_id"]); dogID > 0 {
+		routeWhere = append(routeWhere, routeDB.DogID.Eq(dogID))
+	}
+	if status := stringValue(param, "status", ""); status != "" {
+		routeWhere = append(routeWhere, routeDB.Status.Eq(status))
+	}
+	if runStatus := stringValue(param, "run_status", ""); runStatus != "" {
+		routeWhere = append(routeWhere, routeDB.RunStatus.Eq(runStatus))
+	}
+	if name := firstNonEmptyString(stringValue(param, "route_name", ""), stringValue(param, "name", "")); name != "" {
+		routeWhere = append(routeWhere, routeDB.Name.Like("%"+name+"%"))
+	}
+	routes, err := routeDB.WithContext(ctx).Where(routeWhere...).Order(routeDB.ID.Desc()).Find()
+	if err != nil {
+		gf.Failed().SetMsg("获取航线数据失败").SetData(err).Regin(ctx)
+		return
+	}
+
+	gf.Success().SetMsg("获取航线航点数据").SetData(map[string]interface{}{
+		"list":  routeWaypointAllData(ctx, tenant, routes),
+		"total": len(routes),
+	}).Regin(ctx)
 }
 
 func (api *Index) SaveWaypoint(ctx *gf.GinCtx) {
@@ -514,6 +670,7 @@ func (api *Index) SaveWaypoint(ctx *gf.GinCtx) {
 			MapID:              gf.Int64(param["map_id"]),
 			DogID:              gf.Int64(param["dog_id"]),
 			Name:               name,
+			IsTask:             gf.Int8(param["is_task"]),
 			X:                  poseValues["x"].(float64),
 			Y:                  poseValues["y"].(float64),
 			Z:                  poseValues["z"].(float64),
@@ -551,6 +708,7 @@ func (api *Index) SaveWaypoint(ctx *gf.GinCtx) {
 		"map_id":     gf.Int64(param["map_id"]),
 		"dog_id":     gf.Int64(param["dog_id"]),
 		"name":       name,
+		"is_task":    gf.Int8(param["is_task"]),
 		"remark":     stringValue(param, "remark", ""),
 		"updated_at": now,
 	}
@@ -661,6 +819,7 @@ func (api *Index) ImportWaypoint(ctx *gf.GinCtx) {
 			TenantID:     tenant,
 			MapID:        gf.Int64(row["map_id"]),
 			Name:         name,
+			IsTask:       gf.Int8(row["is_task"]),
 			X:            gf.Float64(row["x"]),
 			Y:            gf.Float64(row["y"]),
 			Z:            gf.Float64(row["z"]),
@@ -725,6 +884,9 @@ func (api *Index) SaveRoute(ctx *gf.GinCtx) {
 	if edgeErr != nil {
 		gf.Failed().SetMsg(edgeErr.Error()).Regin(ctx)
 		return
+	}
+	if len(navigateRefs) > 0 {
+		waypointIDs = waypointIDsFromNavigateRefs(navigateRefs)
 	}
 	if len(waypointIDs) == 0 && (!hasTasks || len(routeTasks) == 0) {
 		gf.Failed().SetMsg("航线至少需要一个航点或子任务").Regin(ctx)
