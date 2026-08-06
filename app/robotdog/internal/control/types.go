@@ -56,6 +56,8 @@ type RealtimeData struct {
 	TargetID   int64                  `json:"target_id"`
 	Driver     string                 `json:"driver"`
 	At         time.Time              `json:"at"`
+	Battery    *int                   `json:"battery,omitempty"`
+	NavStatus  string                 `json:"nav_status,omitempty"`
 	Data       map[string]interface{} `json:"data"`
 }
 
@@ -80,6 +82,8 @@ type DogController interface {
 	MoveForward(ctx context.Context, target DogTarget, opts MoveOptions) (*CommandResult, error)
 	MoveBackward(ctx context.Context, target DogTarget, opts MoveOptions) (*CommandResult, error)
 	Stop(ctx context.Context, target DogTarget) (*CommandResult, error)
+	SetGait(ctx context.Context, target DogTarget, gait string) (*CommandResult, error)
+	Charge(ctx context.Context, target DogTarget, action string) (*CommandResult, error)
 	Realtime(ctx context.Context, target DogTarget) (*RealtimeData, error)
 }
 
