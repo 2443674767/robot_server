@@ -3,12 +3,15 @@ package task
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
+	internalcontrol "gofly/app/robotdog/internal/control"
 	"gofly/dao"
 	"gofly/dao/model"
 	"gofly/utils/gf"
@@ -196,6 +199,12 @@ func executeRouteTask(ctx context.Context, tenant int32, taskID string, route *m
 			updateTaskStatus(ctx, tenant, taskID, status, progress(i+1, len(steps)), message)
 			break
 		}
+		if err := executeTaskWaypointPTZ(ctx, tenant, step); err != nil {
+			status = "failed"
+			message = err.Error()
+			updateTaskStatus(ctx, tenant, taskID, status, progress(i+1, len(steps)), message)
+			break
+		}
 		if step.WaitSec > 0 {
 			time.Sleep(time.Duration(step.WaitSec * float64(time.Second)))
 		}
@@ -364,6 +373,124 @@ func ensureStepEndCondition(ctx context.Context, tenant int32, route *model.Robo
 		}
 	}
 	return nil
+}
+
+func executeTaskWaypointPTZ(ctx context.Context, tenant int32, step routeStep) error {
+	if step.Action != "navigate" {
+		return nil
+	}
+	waypointID := gf.Int64(step.Params["waypoint_id"])
+	if waypointID <= 0 {
+		return nil
+	}
+	wpDB := dao.Query().RobotdogWaypoint
+	waypoint, err := wpDB.WithContext(ctx).Where(wpDB.TenantID.Eq(tenant), wpDB.ID.Eq(waypointID)).First()
+	if err != nil {
+		return fmt.Errorf("第%d个navigate子任务云台联动失败:航点不存在:%d", step.Seq, waypointID)
+	}
+	if waypoint.IsTask != 1 {
+		return nil
+	}
+	var preset model.RobotdogPtzPreset
+	err = dao.DB().WithContext(ctx).Where("tenant_id = ? AND waypoint_id = ? AND deleted_at IS NULL", tenant, waypointID).Order("sort_no ASC, id ASC").First(&preset).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("第%d个navigate子任务读取云台预置位失败:%w", step.Seq, err)
+	}
+	ptz, err := loadTaskPTZ(ctx, tenant, preset.PtzID)
+	if err != nil {
+		return fmt.Errorf("第%d个navigate子任务云台不存在:%w", step.Seq, err)
+	}
+	driver, _, err := internalcontrol.PTZDriver(ptz.Model)
+	if err != nil {
+		return fmt.Errorf("第%d个navigate子任务获取云台驱动失败:%w", step.Seq, err)
+	}
+	target := internalcontrol.FillPTZTargetDefaults(taskPTZTarget(ptz))
+	if _, err := driver.SetAngle(ctx, target, internalcontrol.PTZAngleOptions{Pan: preset.Yaw, Tilt: preset.Pitch, Roll: preset.Roll}); err != nil {
+		return fmt.Errorf("第%d个navigate子任务发送云台预置位失败:%w", step.Seq, err)
+	}
+	if preset.ServoPhoto == 1 {
+		if err := takeTaskPTZPhoto(ctx, tenant, waypointID, ptz, driver, target); err != nil {
+			return fmt.Errorf("第%d个navigate子任务云台拍照失败:%w", step.Seq, err)
+		}
+	}
+	if preset.AutoHome == 1 {
+		if _, err := driver.Home(ctx, target); err != nil {
+			return fmt.Errorf("第%d个navigate子任务云台回正失败:%w", step.Seq, err)
+		}
+	}
+	return nil
+}
+
+func loadTaskPTZ(ctx context.Context, tenant int32, ptzID int64) (*model.RobotdogPtz, error) {
+	ptzDB := dao.Query().RobotdogPtz
+	if ptzID > 0 {
+		return ptzDB.WithContext(ctx).Where(ptzDB.TenantID.Eq(tenant), ptzDB.ID.Eq(ptzID)).First()
+	}
+	return ptzDB.WithContext(ctx).Where(ptzDB.TenantID.Eq(tenant), ptzDB.Status.Eq("online")).Order(ptzDB.ID.Asc()).First()
+}
+
+func takeTaskPTZPhoto(ctx context.Context, tenant int32, waypointID int64, ptz *model.RobotdogPtz, driver internalcontrol.PTZController, target internalcontrol.PTZTarget) error {
+	filename := "ptz_" + time.Now().Format("20060102150405") + ".jpg"
+	opts := internalcontrol.PhotoOptions{Mode: "default", Folder: "robotdog_ptz", Filename: filename}
+	result, err := driver.TakePhoto(ctx, target, opts)
+	if err != nil {
+		return err
+	}
+	rawData, _ := json.Marshal(result)
+	now := time.Now()
+	return dao.DB().WithContext(ctx).Create(&model.RobotdogPtzPhoto{
+		TenantID:   tenant,
+		WaypointID: waypointID,
+		PtzID:      ptz.ID,
+		Filename:   filename,
+		FilePath:   taskPTZPhotoFilePath(opts.Folder, opts.Filename),
+		Mode:       opts.Mode,
+		RawData:    string(rawData),
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}).Error
+}
+
+func taskPTZTarget(ptz *model.RobotdogPtz) internalcontrol.PTZTarget {
+	return internalcontrol.PTZTarget{
+		ID:                ptz.ID,
+		Name:              ptz.Name,
+		DeviceUID:         ptz.DeviceUID,
+		Username:          ptz.Username,
+		Password:          ptz.Password,
+		Brand:             ptz.Brand,
+		Model:             ptz.Model,
+		Protocol:          strings.ToLower(ptz.Protocol),
+		UDPHost:           firstNonEmpty(ptz.UdpHost, ptz.IPAddr),
+		UDPPort:           ptz.UdpPort,
+		LocalPort:         ptz.LocalPort,
+		TargetSystemID:    byte(ptz.TargetSystemID),
+		TargetComponentID: byte(ptz.TargetComponentID),
+		SourceSystemID:    byte(ptz.SourceSystemID),
+		SourceComponentID: byte(ptz.SourceComponentID),
+		RTSPURL:           ptz.RTSPURL,
+	}
+}
+
+func taskPTZPhotoFilePath(folder string, filename string) string {
+	folder = strings.Trim(folder, "/")
+	filename = strings.Trim(filename, "/")
+	if folder == "" {
+		folder = "robotdog_ptz"
+	}
+	return "resource/uploads/" + folder + "/" + filename
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func updateTaskStatus(ctx context.Context, tenant int32, taskID string, status string, progress int32, message string) {
