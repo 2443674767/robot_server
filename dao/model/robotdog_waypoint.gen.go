@@ -19,6 +19,7 @@ type RobotdogWaypoint struct {
 	MapID              int64          `gorm:"column:map_id;not null;comment:地图ID" json:"map_id"`                                        // 地图ID
 	DogID              int64          `gorm:"column:dog_id;not null;comment:机械狗ID" json:"dog_id"`                                       // 机械狗ID
 	Name               string         `gorm:"column:name;not null;comment:航点名称" json:"name"`                                            // 航点名称
+	IsTask             int8           `gorm:"column:is_task;not null;default:0;comment:是否任务航点:0否1是" json:"is_task"`                     // 是否任务航点:0否1是
 	X                  float64        `gorm:"column:x;not null;default:0.0000;comment:X坐标" json:"x"`                                    // X坐标
 	Y                  float64        `gorm:"column:y;not null;default:0.0000;comment:Y坐标" json:"y"`                                    // Y坐标
 	Z                  float64        `gorm:"column:z;not null;default:0.0000;comment:Z坐标" json:"z"`                                    // Z坐标
