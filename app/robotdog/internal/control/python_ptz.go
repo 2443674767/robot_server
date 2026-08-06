@@ -61,6 +61,18 @@ func (d *PythonPTZDriver) FocusFar(ctx context.Context, target PTZTarget, opts F
 	return d.runSimple(ctx, target, "focus_far", []string{"focus", "far"}, 0)
 }
 
+func (d *PythonPTZDriver) Home(ctx context.Context, target PTZTarget) (*CommandResult, error) {
+	return d.runSimple(ctx, target, "home", []string{"center"}, 0)
+}
+
+func (d *PythonPTZDriver) SetAngle(ctx context.Context, target PTZTarget, opts PTZAngleOptions) (*CommandResult, error) {
+	return d.runSimple(ctx, target, "angle_set", []string{"angle-abs", "--pitch", fmt.Sprintf("%.3f", opts.Tilt), "--yaw", fmt.Sprintf("%.3f", opts.Pan)}, 0)
+}
+
+func (d *PythonPTZDriver) TakePhoto(ctx context.Context, target PTZTarget, opts PhotoOptions) (*CommandResult, error) {
+	return d.runSimple(ctx, target, "photo", []string{"photo"}, 0)
+}
+
 func (d *PythonPTZDriver) Stop(ctx context.Context, target PTZTarget) (*CommandResult, error) {
 	return d.runRate(ctx, target, "stop", 0, 0, 0)
 }
