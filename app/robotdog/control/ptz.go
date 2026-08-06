@@ -44,6 +44,7 @@ func (api *Ptz) Move(ctx *gf.GinCtx) {
 		UDPHost:  ptz.UdpHost,
 		UDPPort:  ptz.UdpPort,
 	}
+	target = internalcontrol.FillPTZTargetDefaults(target)
 	moveOpts := internalcontrol.PTZMoveOptions{
 		Direction: command,
 		Speed:     gf.Float64(param["speed"]),
@@ -86,7 +87,7 @@ func (api *Ptz) Move(ctx *gf.GinCtx) {
 		return
 	}
 	if err != nil {
-		gf.Failed().SetMsg("发送云台UDP指令失败").SetData(err).Regin(ctx)
+		gf.Failed().SetMsg("发送云台UDP指令失败: " + err.Error()).SetData(map[string]interface{}{"error": err.Error()}).Regin(ctx)
 		return
 	}
 	result.Driver = driverName
