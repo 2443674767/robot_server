@@ -313,7 +313,16 @@ func executeStep(ctx context.Context, tenant int32, route *model.RobotdogRoute, 
 			return fmt.Errorf("第%d个relocalize子任务发送重定位失败:%w", step.Seq, err)
 		}
 		return nil
-	case "lie", "stand", "line_navigate", "photo", "switch_map", "voice":
+	case "switch_map":
+		mapID := stepParamID(step.Params, "id", "map_id")
+		if mapID <= 0 {
+			return fmt.Errorf("第%d个switch_map子任务缺少params.id", step.Seq)
+		}
+		if _, err := postSwitchMap(ctx, cfg, mapID); err != nil {
+			return fmt.Errorf("第%d个switch_map子任务发送切换地图失败:%w", step.Seq, err)
+		}
+		return nil
+	case "lie", "stand", "line_navigate", "photo", "voice":
 		return nil
 	default:
 		return fmt.Errorf("第%d个子任务动作不支持:%s", step.Seq, step.Action)

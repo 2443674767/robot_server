@@ -117,6 +117,10 @@ func (cfg robotdogTaskConfig) resetLocationURL() string {
 	return cfg.extraURL("/api/extra/reset_location")
 }
 
+func (cfg robotdogTaskConfig) switchMapURL() string {
+	return cfg.extraURL("/api/extra/switch_map")
+}
+
 func (cfg robotdogTaskConfig) extraURL(path string) string {
 	host := strings.TrimSpace(cfg.StatusAPIHost)
 	if strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://") {
@@ -192,6 +196,39 @@ func postResetLocation(ctx context.Context, cfg robotdogTaskConfig, id int64) (m
 			return data, fmt.Errorf("%s", msg)
 		}
 		return data, fmt.Errorf("重定位接口返回失败")
+	}
+	return data, nil
+}
+
+func postSwitchMap(ctx context.Context, cfg robotdogTaskConfig, id int64) (map[string]interface{}, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, cfg.timeout())
+	defer cancel()
+	body, err := json.Marshal(map[string]interface{}{"id": id})
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, cfg.switchMapURL(), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("切换地图接口HTTP状态异常:%d", resp.StatusCode)
+	}
+	var data map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, err
+	}
+	if success, ok := data["success"].(bool); ok && !success {
+		if msg := strings.TrimSpace(fmt.Sprint(data["msg"])); msg != "" && msg != "<nil>" {
+			return data, fmt.Errorf("%s", msg)
+		}
+		return data, fmt.Errorf("切换地图接口返回失败")
 	}
 	return data, nil
 }

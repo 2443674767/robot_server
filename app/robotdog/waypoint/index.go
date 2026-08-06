@@ -989,15 +989,25 @@ func (api *Index) ResetLocation(ctx *gf.GinCtx) {
 
 func (api *Index) GetMapList(ctx *gf.GinCtx) {
 	param, _ := gf.RequestParam(ctx)
-	mapDB := dao.Query().RobotdogMap
-	tenant := tenantID(ctx, param)
-	offset, limit := pageArgs(param)
-	list, total, err := mapDB.WithContext(ctx).Where(mapDB.TenantID.Eq(tenant)).Order(mapDB.ID.Desc()).FindByPage(offset, limit)
+	page := gf.Int(param["page"])
+	if page <= 0 {
+		page = 1
+	}
+	data, err := deviceExtraGet(ctx.Request.Context(), "/api/extra/get_map_data", url.Values{"page": []string{fmt.Sprintf("%d", page)}})
 	if err != nil {
-		gf.Failed().SetMsg("获取地图列表失败").SetData(err).Regin(ctx)
+		gf.Failed().SetMsg("获取设备地图列表失败").SetData(err.Error()).Regin(ctx)
 		return
 	}
-	gf.Success().SetMsg("获取地图列表").SetData(map[string]interface{}{"list": list, "total": total}).Regin(ctx)
+	gf.Success().SetMsg("获取设备地图列表成功").SetData(data).Regin(ctx)
+}
+
+func (api *Index) GetAllMapNavData(ctx *gf.GinCtx) {
+	data, err := deviceExtraGet(ctx.Request.Context(), "/api/task/get_all_map_nav_data", nil)
+	if err != nil {
+		gf.Failed().SetMsg("获取地图导航数据失败").SetData(err.Error()).Regin(ctx)
+		return
+	}
+	gf.Success().SetMsg("获取地图导航数据成功").SetData(data).Regin(ctx)
 }
 
 func (api *Index) UploadMap(ctx *gf.GinCtx) {
