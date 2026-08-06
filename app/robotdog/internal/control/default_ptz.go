@@ -46,6 +46,18 @@ func (d *DefaultPTZDriver) FocusFar(ctx context.Context, target PTZTarget, opts 
 	return d.send(ctx, target, "focus_far", buildFrame(0x02, 0x32, scaleToByte(opts.Step, 1), durationToUint16(opts.Duration)))
 }
 
+func (d *DefaultPTZDriver) Home(ctx context.Context, target PTZTarget) (*CommandResult, error) {
+	return d.send(ctx, target, "home", buildFrame(0x02, 0x40, 0, 0))
+}
+
+func (d *DefaultPTZDriver) SetAngle(ctx context.Context, target PTZTarget, opts PTZAngleOptions) (*CommandResult, error) {
+	return d.send(ctx, target, "angle_set", buildFrame(0x02, 0x41, scaleToByte(opts.Pan, 0), durationToUint16(opts.Duration)))
+}
+
+func (d *DefaultPTZDriver) TakePhoto(ctx context.Context, target PTZTarget, opts PhotoOptions) (*CommandResult, error) {
+	return d.send(ctx, target, "photo", buildFrame(0x02, 0x50, 1, 0))
+}
+
 func (d *DefaultPTZDriver) Stop(ctx context.Context, target PTZTarget) (*CommandResult, error) {
 	return d.send(ctx, target, "stop", buildFrame(0x02, 0x00, 0, 0))
 }

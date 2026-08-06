@@ -36,13 +36,22 @@ func (api *Ptz) Move(ctx *gf.GinCtx) {
 		return
 	}
 	target := internalcontrol.PTZTarget{
-		ID:       ptz.ID,
-		Name:     ptz.Name,
-		Brand:    ptz.Brand,
-		Model:    ptz.Model,
-		Protocol: strings.ToLower(ptz.Protocol),
-		UDPHost:  ptz.UdpHost,
-		UDPPort:  ptz.UdpPort,
+		ID:                ptz.ID,
+		Name:              ptz.Name,
+		DeviceUID:         ptz.DeviceUID,
+		Username:          ptz.Username,
+		Password:          ptz.Password,
+		Brand:             ptz.Brand,
+		Model:             ptz.Model,
+		Protocol:          strings.ToLower(ptz.Protocol),
+		UDPHost:           firstNonEmpty(ptz.UdpHost, ptz.IPAddr),
+		UDPPort:           ptz.UdpPort,
+		LocalPort:         ptz.LocalPort,
+		TargetSystemID:    byte(ptz.TargetSystemID),
+		TargetComponentID: byte(ptz.TargetComponentID),
+		SourceSystemID:    byte(ptz.SourceSystemID),
+		SourceComponentID: byte(ptz.SourceComponentID),
+		RTSPURL:           ptz.RTSPURL,
 	}
 	target = internalcontrol.FillPTZTargetDefaults(target)
 	moveOpts := internalcontrol.PTZMoveOptions{
@@ -80,6 +89,21 @@ func (api *Ptz) Move(ctx *gf.GinCtx) {
 		result, err = driver.FocusNear(ctx, target, focusOpts)
 	case "focus_far":
 		result, err = driver.FocusFar(ctx, target, focusOpts)
+	case "home":
+		result, err = driver.Home(ctx, target)
+	case "angle_set":
+		result, err = driver.SetAngle(ctx, target, internalcontrol.PTZAngleOptions{
+			Pan:      gf.Float64(param["pan"]),
+			Tilt:     gf.Float64(param["tilt"]),
+			Roll:     gf.Float64(param["roll"]),
+			Duration: gf.Int(param["duration"]),
+		})
+	case "photo":
+		result, err = driver.TakePhoto(ctx, target, internalcontrol.PhotoOptions{
+			Mode:     gf.String(param["mode"]),
+			Folder:   gf.String(param["folder"]),
+			Filename: gf.String(param["filename"]),
+		})
 	case "stop":
 		result, err = driver.Stop(ctx, target)
 	default:
@@ -107,13 +131,22 @@ func (api *Ptz) GetRealtime(ctx *gf.GinCtx) {
 		return
 	}
 	data, err := driver.Realtime(ctx, internalcontrol.PTZTarget{
-		ID:       ptz.ID,
-		Name:     ptz.Name,
-		Brand:    ptz.Brand,
-		Model:    ptz.Model,
-		Protocol: strings.ToLower(ptz.Protocol),
-		UDPHost:  ptz.UdpHost,
-		UDPPort:  ptz.UdpPort,
+		ID:                ptz.ID,
+		Name:              ptz.Name,
+		DeviceUID:         ptz.DeviceUID,
+		Username:          ptz.Username,
+		Password:          ptz.Password,
+		Brand:             ptz.Brand,
+		Model:             ptz.Model,
+		Protocol:          strings.ToLower(ptz.Protocol),
+		UDPHost:           firstNonEmpty(ptz.UdpHost, ptz.IPAddr),
+		UDPPort:           ptz.UdpPort,
+		LocalPort:         ptz.LocalPort,
+		TargetSystemID:    byte(ptz.TargetSystemID),
+		TargetComponentID: byte(ptz.TargetComponentID),
+		SourceSystemID:    byte(ptz.SourceSystemID),
+		SourceComponentID: byte(ptz.SourceComponentID),
+		RTSPURL:           ptz.RTSPURL,
 	})
 	if err != nil {
 		gf.Failed().SetMsg("获取云台实时数据失败").SetData(err).Regin(ctx)
@@ -128,6 +161,12 @@ func findPTZ(ctx *gf.GinCtx, param map[string]interface{}) (*model.RobotdogPtz, 
 	tenant := tenantID(ctx, param)
 	if ptzID := gf.Int64(param["ptz_id"]); ptzID > 0 {
 		return ptzDB.WithContext(ctx).Where(ptzDB.ID.Eq(ptzID), ptzDB.TenantID.Eq(tenant)).First()
+	}
+	if dogID := gf.Int64(param["dog_id"]); dogID > 0 {
+		dogDB := dao.Query().RobotdogDog
+		if dog, err := dogDB.WithContext(ctx).Where(dogDB.ID.Eq(dogID), dogDB.TenantID.Eq(tenant)).First(); err == nil && dog.PtzID > 0 {
+			return ptzDB.WithContext(ctx).Where(ptzDB.ID.Eq(dog.PtzID), ptzDB.TenantID.Eq(tenant)).First()
+		}
 	}
 	return ptzDB.WithContext(ctx).Where(ptzDB.TenantID.Eq(tenant), ptzDB.Status.Eq("online")).Order(ptzDB.ID.Asc()).First()
 }
@@ -151,9 +190,24 @@ func normalizePTZCommand(v string) string {
 		return "focus_near"
 	case "focus_far", "focusfar", "focus-":
 		return "focus_far"
+	case "home", "center", "reset", "zero":
+		return "home"
+	case "angle_set", "angleset", "set_angle":
+		return "angle_set"
+	case "photo", "take_photo", "capture":
+		return "photo"
 	case "stop", "halt":
 		return "stop"
 	default:
 		return v
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

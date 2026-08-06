@@ -18,22 +18,30 @@ const (
 )
 
 type UDPConfig struct {
-	DogHost      string
-	DogPort      int
-	DogLocalPort string
-	PTZHost      string
-	PTZPort      int
-	PTZLocalPort string
+	DogHost              string
+	DogPort              int
+	DogLocalPort         string
+	PTZHost              string
+	PTZPort              int
+	PTZLocalPort         string
+	PTZTargetSystemID    int
+	PTZTargetComponentID int
+	PTZSourceSystemID    int
+	PTZSourceComponentID int
 }
 
 func LoadUDPConfig() UDPConfig {
 	cfg := UDPConfig{
-		DogHost:      defaultDogUDPHost,
-		DogPort:      defaultDogUDPPort,
-		DogLocalPort: defaultDogUDPLocalPort,
-		PTZHost:      defaultPTZUDPHost,
-		PTZPort:      defaultPTZUDPPort,
-		PTZLocalPort: defaultPTZUDPLocalPort,
+		DogHost:              defaultDogUDPHost,
+		DogPort:              defaultDogUDPPort,
+		DogLocalPort:         defaultDogUDPLocalPort,
+		PTZHost:              defaultPTZUDPHost,
+		PTZPort:              defaultPTZUDPPort,
+		PTZLocalPort:         defaultPTZUDPLocalPort,
+		PTZTargetSystemID:    3,
+		PTZTargetComponentID: 1,
+		PTZSourceSystemID:    1,
+		PTZSourceComponentID: 1,
 	}
 	wd, err := os.Getwd()
 	if err != nil {
@@ -64,6 +72,18 @@ func LoadUDPConfig() UDPConfig {
 	if v := strings.TrimSpace(vip.GetString("data.ptz_udp_local_port")); v != "" {
 		cfg.PTZLocalPort = v
 	}
+	if v := vip.GetInt("data.ptz_target_system_id"); v > 0 {
+		cfg.PTZTargetSystemID = v
+	}
+	if v := vip.GetInt("data.ptz_target_component_id"); v > 0 {
+		cfg.PTZTargetComponentID = v
+	}
+	if v := vip.GetInt("data.ptz_source_system_id"); v > 0 {
+		cfg.PTZSourceSystemID = v
+	}
+	if v := vip.GetInt("data.ptz_source_component_id"); v > 0 {
+		cfg.PTZSourceComponentID = v
+	}
 	return cfg
 }
 
@@ -86,5 +106,31 @@ func FillPTZTargetDefaults(target PTZTarget) PTZTarget {
 	if target.UDPPort == 0 {
 		target.UDPPort = int32(cfg.PTZPort)
 	}
+	if target.LocalPort == 0 {
+		target.LocalPort = int32(parsePositiveInt(cfg.PTZLocalPort))
+	}
+	if target.TargetSystemID == 0 {
+		target.TargetSystemID = byte(cfg.PTZTargetSystemID)
+	}
+	if target.TargetComponentID == 0 {
+		target.TargetComponentID = byte(cfg.PTZTargetComponentID)
+	}
+	if target.SourceSystemID == 0 {
+		target.SourceSystemID = byte(cfg.PTZSourceSystemID)
+	}
+	if target.SourceComponentID == 0 {
+		target.SourceComponentID = byte(cfg.PTZSourceComponentID)
+	}
 	return target
+}
+
+func parsePositiveInt(v string) int {
+	n := 0
+	for _, ch := range strings.TrimSpace(v) {
+		if ch < '0' || ch > '9' {
+			return 0
+		}
+		n = n*10 + int(ch-'0')
+	}
+	return n
 }
