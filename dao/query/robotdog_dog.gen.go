@@ -39,6 +39,7 @@ func newRobotdogDog(db *gorm.DB, opts ...gen.DOOption) robotdogDog {
 	_robotdogDog.StreamURL = field.NewString(tableName, "stream_url")
 	_robotdogDog.RtspURL = field.NewString(tableName, "rtsp_url")
 	_robotdogDog.MapID = field.NewInt64(tableName, "map_id")
+	_robotdogDog.PtzID = field.NewInt64(tableName, "ptz_id")
 	_robotdogDog.UdpHost = field.NewString(tableName, "udp_host")
 	_robotdogDog.UdpPort = field.NewInt32(tableName, "udp_port")
 	_robotdogDog.Remark = field.NewString(tableName, "remark")
@@ -67,6 +68,7 @@ type robotdogDog struct {
 	StreamURL field.String  // 视频播放地址
 	RtspURL   field.String  // RTSP地址
 	MapID     field.Int64   // 默认地图ID
+	PtzID     field.Int64   // 绑定云台ID
 	UdpHost   field.String  // UDP主机地址
 	UdpPort   field.Int32   // UDP端口
 	Remark    field.String  // 备注
@@ -100,6 +102,7 @@ func (r *robotdogDog) updateTableName(table string) *robotdogDog {
 	r.StreamURL = field.NewString(table, "stream_url")
 	r.RtspURL = field.NewString(table, "rtsp_url")
 	r.MapID = field.NewInt64(table, "map_id")
+	r.PtzID = field.NewInt64(table, "ptz_id")
 	r.UdpHost = field.NewString(table, "udp_host")
 	r.UdpPort = field.NewInt32(table, "udp_port")
 	r.Remark = field.NewString(table, "remark")
@@ -122,7 +125,7 @@ func (r *robotdogDog) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (r *robotdogDog) fillFieldMap() {
-	r.fieldMap = make(map[string]field.Expr, 17)
+	r.fieldMap = make(map[string]field.Expr, 18)
 	r.fieldMap["id"] = r.ID
 	r.fieldMap["tenant_id"] = r.TenantID
 	r.fieldMap["name"] = r.Name
@@ -134,6 +137,7 @@ func (r *robotdogDog) fillFieldMap() {
 	r.fieldMap["stream_url"] = r.StreamURL
 	r.fieldMap["rtsp_url"] = r.RtspURL
 	r.fieldMap["map_id"] = r.MapID
+	r.fieldMap["ptz_id"] = r.PtzID
 	r.fieldMap["udp_host"] = r.UdpHost
 	r.fieldMap["udp_port"] = r.UdpPort
 	r.fieldMap["remark"] = r.Remark
