@@ -6,6 +6,12 @@ data:
   foxglove_ws_url: "ws://10.21.31.100:8765"
   foxglove_topic: "/base_link/odom"
   foxglove_timeout_ms: 5000
+  dog_udp_host: "10.21.31.103"
+  dog_udp_port: 30000
+  dog_udp_local_port: "30002"
+  ptz_udp_host: "10.21.31.64"
+  ptz_udp_port: 3000
+  ptz_udp_local_port: "3000"
   status_api_host: "10.21.31.100"
   status_api_port: 9000
   status_api_timeout_ms: 5000
