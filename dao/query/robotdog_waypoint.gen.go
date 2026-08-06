@@ -33,6 +33,7 @@ func newRobotdogWaypoint(db *gorm.DB, opts ...gen.DOOption) robotdogWaypoint {
 	_robotdogWaypoint.MapID = field.NewInt64(tableName, "map_id")
 	_robotdogWaypoint.DogID = field.NewInt64(tableName, "dog_id")
 	_robotdogWaypoint.Name = field.NewString(tableName, "name")
+	_robotdogWaypoint.IsTask = field.NewInt8(tableName, "is_task")
 	_robotdogWaypoint.X = field.NewFloat64(tableName, "x")
 	_robotdogWaypoint.Y = field.NewFloat64(tableName, "y")
 	_robotdogWaypoint.Z = field.NewFloat64(tableName, "z")
@@ -75,6 +76,7 @@ type robotdogWaypoint struct {
 	MapID              field.Int64   // 地图ID
 	DogID              field.Int64   // 机械狗ID
 	Name               field.String  // 航点名称
+	IsTask             field.Int8    // 是否任务航点:0否1是
 	X                  field.Float64 // X坐标
 	Y                  field.Float64 // Y坐标
 	Z                  field.Float64 // Z坐标
@@ -122,6 +124,7 @@ func (r *robotdogWaypoint) updateTableName(table string) *robotdogWaypoint {
 	r.MapID = field.NewInt64(table, "map_id")
 	r.DogID = field.NewInt64(table, "dog_id")
 	r.Name = field.NewString(table, "name")
+	r.IsTask = field.NewInt8(table, "is_task")
 	r.X = field.NewFloat64(table, "x")
 	r.Y = field.NewFloat64(table, "y")
 	r.Z = field.NewFloat64(table, "z")
@@ -164,12 +167,13 @@ func (r *robotdogWaypoint) GetFieldByName(fieldName string) (field.OrderExpr, bo
 }
 
 func (r *robotdogWaypoint) fillFieldMap() {
-	r.fieldMap = make(map[string]field.Expr, 31)
+	r.fieldMap = make(map[string]field.Expr, 32)
 	r.fieldMap["id"] = r.ID
 	r.fieldMap["tenant_id"] = r.TenantID
 	r.fieldMap["map_id"] = r.MapID
 	r.fieldMap["dog_id"] = r.DogID
 	r.fieldMap["name"] = r.Name
+	r.fieldMap["is_task"] = r.IsTask
 	r.fieldMap["x"] = r.X
 	r.fieldMap["y"] = r.Y
 	r.fieldMap["z"] = r.Z
