@@ -12,6 +12,11 @@ data:
   ptz_udp_host: "10.21.31.64"
   ptz_udp_port: 3000
   ptz_udp_local_port: "3000"
+  ptz_type: "libra4"
+  ptz_target_system_id: 3
+  ptz_target_component_id: 1
+  ptz_source_system_id: 1
+  ptz_source_component_id: 1
   status_api_host: "10.21.31.100"
   status_api_port: 9000
   status_api_timeout_ms: 5000
