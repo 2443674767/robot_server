@@ -12,9 +12,9 @@ const (
 	defaultDogUDPHost      = "10.21.31.103"
 	defaultDogUDPPort      = 30000
 	defaultDogUDPLocalPort = "30002"
-	defaultPTZUDPHost      = "10.21.31.111"
-	defaultPTZUDPPort      = 3000
-	defaultPTZUDPLocalPort = "3000"
+	defaultPTZUDPHost      = "10.21.31.64"
+	defaultPTZUDPPort      = 1030
+	defaultPTZUDPLocalPort = "0"
 )
 
 type UDPConfig struct {
