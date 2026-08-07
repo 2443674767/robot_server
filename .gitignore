@@ -8,6 +8,7 @@ devsource/developer/install
 tmp
 resource/config/config.local.yaml
 resource/pcdmap
+resource/uploads/robotdog
 docx
 resource/sql
 
