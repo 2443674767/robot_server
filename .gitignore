@@ -7,6 +7,7 @@ business
 devsource/developer/install
 tmp
 resource/config/config.local.yaml
+resource/pcdmap
 docx
 resource/sql
 
