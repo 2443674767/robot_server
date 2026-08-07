@@ -1,9 +1,12 @@
 package waypoint
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
+	"mime/multipart"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -16,13 +19,19 @@ import (
 	"gofly/dao/model"
 	"gofly/utils/gf"
 
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/spf13/viper"
 	"gorm.io/gorm"
 )
 
-type Index struct{ NoNeedAuths []string }
+type Index struct {
+	NoNeedAuths []string
+	NoNeedLogin []string
+}
 
 func init() {
-	gf.Register(&Index{})
+	gf.Register(&Index{NoNeedLogin: []string{"getPcdFile"}})
 }
 
 func tenantID(ctx *gf.GinCtx, param map[string]interface{}) int32 {
@@ -464,6 +473,348 @@ func routeWaypointAllData(ctx *gf.GinCtx, tenantID int32, routes []*model.Robotd
 		})
 	}
 	return list
+}
+
+type robotdogMinioConfig struct {
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+	Bucket    string
+	UseSSL    bool
+}
+
+func loadRobotdogMinioConfig() robotdogMinioConfig {
+	cfg := robotdogMinioConfig{
+		Endpoint:  "localhost:9000",
+		AccessKey: "admin",
+		SecretKey: "12345678",
+		Bucket:    "robotdog",
+		UseSSL:    false,
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return cfg
+	}
+	vip := viper.New()
+	vip.AddConfigPath(filepath.Join(wd, "resource/config"))
+	vip.SetConfigName("upload")
+	vip.SetConfigType("yaml")
+	if err := vip.ReadInConfig(); err != nil {
+		return cfg
+	}
+	if v := strings.TrimSpace(vip.GetString("minio.endpoint")); v != "" {
+		cfg.Endpoint = v
+	}
+	if v := strings.TrimSpace(vip.GetString("minio.accessKey")); v != "" {
+		cfg.AccessKey = v
+	}
+	if v := strings.TrimSpace(vip.GetString("minio.secretKey")); v != "" {
+		cfg.SecretKey = v
+	}
+	if v := strings.TrimSpace(vip.GetString("minio.bucket")); v != "" {
+		cfg.Bucket = v
+	}
+	cfg.UseSSL = vip.GetBool("minio.useSSL")
+	return cfg
+}
+
+func (cfg robotdogMinioConfig) objectBaseURL() string {
+	endpoint := strings.TrimRight(cfg.Endpoint, "/")
+	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
+		return endpoint + "/" + cfg.Bucket
+	}
+	scheme := "http"
+	if cfg.UseSSL {
+		scheme = "https"
+	}
+	return scheme + "://" + endpoint + "/" + cfg.Bucket
+}
+
+func (cfg robotdogMinioConfig) client() (*minio.Client, error) {
+	endpoint := strings.TrimSpace(cfg.Endpoint)
+	endpoint = strings.TrimPrefix(endpoint, "http://")
+	endpoint = strings.TrimPrefix(endpoint, "https://")
+	return minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+		Secure: cfg.UseSSL,
+	})
+}
+
+func ensureRobotdogMinioBucket(ctx context.Context, client *minio.Client, cfg robotdogMinioConfig) error {
+	exists, err := client.BucketExists(ctx, cfg.Bucket)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		if err := client.MakeBucket(ctx, cfg.Bucket, minio.MakeBucketOptions{}); err != nil {
+			return err
+		}
+	}
+	policy := fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Effect": "Allow",
+				"Principal": {"AWS": ["*"]},
+				"Action": ["s3:GetObject"],
+				"Resource": ["arn:aws:s3:::%s/*"]
+			}
+		]
+	}`, cfg.Bucket)
+	return client.SetBucketPolicy(ctx, cfg.Bucket, policy)
+}
+
+func cleanMinioObjectPath(path string) string {
+	path = strings.TrimSpace(path)
+	path = strings.TrimPrefix(path, "/")
+	path = filepath.ToSlash(filepath.Clean(path))
+	if path == "." || strings.Contains(path, "..") {
+		return ""
+	}
+	return path
+}
+
+func minioObjectURL(cfg robotdogMinioConfig, objectPath string) string {
+	objectPath = cleanMinioObjectPath(objectPath)
+	if objectPath == "" {
+		return ""
+	}
+	return cfg.objectBaseURL() + "/" + objectPath
+}
+
+func pcdFileProxyURL(objectPath string) string {
+	objectPath = cleanMinioObjectPath(objectPath)
+	if objectPath == "" {
+		return ""
+	}
+	return "/robotdog/waypoint/getPcdFile?path=" + url.QueryEscape(objectPath)
+}
+
+func cleanUploadURL(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return path
+	}
+	path = filepath.ToSlash(filepath.Clean(path))
+	path = strings.TrimPrefix(path, "./")
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return path
+}
+
+func fullUploadURL(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return path
+	}
+	if len(path) < 4 {
+		return path
+	}
+	return gf.GetFullUrl(path)
+}
+
+func pcdMapObjectPrefix(mapURL string) (string, bool) {
+	mapURL = strings.TrimSpace(mapURL)
+	if mapURL == "" || strings.HasPrefix(mapURL, "http://") || strings.HasPrefix(mapURL, "https://") {
+		return "", false
+	}
+	prefix := cleanMinioObjectPath(mapURL)
+	if prefix == "" || strings.HasPrefix(prefix, "resource/uploads/") {
+		return "", false
+	}
+	return strings.TrimSuffix(prefix, "/"), true
+}
+
+func pcdLocalPath(url string) (string, bool) {
+	url = strings.TrimSpace(url)
+	if url == "" || strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") || strings.Contains(url, "..") {
+		return "", false
+	}
+	url = strings.TrimPrefix(filepath.ToSlash(url), "/")
+	if !strings.HasPrefix(url, "resource/uploads/") {
+		return "", false
+	}
+	return filepath.Clean(url), true
+}
+
+func pcdLayerKey(filename string) (string, bool) {
+	name := strings.TrimSuffix(filename, filepath.Ext(filename))
+	if name == "" {
+		return "", false
+	}
+	if strings.HasSuffix(name, "_downsize") {
+		name = strings.TrimSuffix(name, "_downsize")
+		return name, true
+	}
+	return name, false
+}
+
+func pcdMapMinioLayers(mapURL string) []map[string]interface{} {
+	prefix, ok := pcdMapObjectPrefix(mapURL)
+	if !ok {
+		return nil
+	}
+	cfg := loadRobotdogMinioConfig()
+	client, err := cfg.client()
+	if err != nil {
+		return []map[string]interface{}{}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := ensureRobotdogMinioBucket(ctx, client, cfg); err != nil {
+		return []map[string]interface{}{}
+	}
+	layerMap := make(map[string]map[string]interface{})
+	for object := range client.ListObjects(ctx, cfg.Bucket, minio.ListObjectsOptions{Prefix: prefix + "/", Recursive: true}) {
+		if object.Err != nil || strings.ToLower(filepath.Ext(object.Key)) != ".pcd" {
+			continue
+		}
+		filename := filepath.Base(object.Key)
+		key, downsize := pcdLayerKey(filename)
+		if key == "" {
+			continue
+		}
+		layer, ok := layerMap[key]
+		if !ok {
+			layer = map[string]interface{}{"key": key, "name": key}
+			layerMap[key] = layer
+		}
+		fileURL := minioObjectURL(cfg, object.Key)
+		proxyURL := pcdFileProxyURL(object.Key)
+		if downsize {
+			layer["downsize_path"] = object.Key
+			layer["downsize_url"] = proxyURL
+			layer["downsize_file_url"] = fileURL
+		} else {
+			layer["path"] = object.Key
+			layer["url"] = proxyURL
+			layer["file_url"] = fileURL
+		}
+	}
+	keys := make([]string, 0, len(layerMap))
+	for key := range layerMap {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	layers := make([]map[string]interface{}, 0, len(keys))
+	for _, key := range keys {
+		layers = append(layers, layerMap[key])
+	}
+	return layers
+}
+
+func pcdMapLayers(mapURL string) []map[string]interface{} {
+	if layers := pcdMapMinioLayers(mapURL); layers != nil {
+		return layers
+	}
+	localPath, ok := pcdLocalPath(mapURL)
+	if !ok {
+		return []map[string]interface{}{}
+	}
+	info, err := os.Stat(localPath)
+	if err != nil {
+		return []map[string]interface{}{}
+	}
+	layerMap := make(map[string]map[string]interface{})
+	addFile := func(filePath string) {
+		if strings.ToLower(filepath.Ext(filePath)) != ".pcd" {
+			return
+		}
+		filename := filepath.Base(filePath)
+		key, downsize := pcdLayerKey(filename)
+		if key == "" {
+			return
+		}
+		layer, ok := layerMap[key]
+		if !ok {
+			layer = map[string]interface{}{"key": key, "name": key}
+			layerMap[key] = layer
+		}
+		url := "/" + filepath.ToSlash(filePath)
+		if downsize {
+			layer["downsize_url"] = url
+			layer["downsize_file_url"] = fullUploadURL(url)
+		} else {
+			layer["url"] = url
+			layer["file_url"] = fullUploadURL(url)
+		}
+	}
+	if info.IsDir() {
+		entries, err := os.ReadDir(localPath)
+		if err != nil {
+			return []map[string]interface{}{}
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			addFile(filepath.Join(localPath, entry.Name()))
+		}
+	} else {
+		addFile(localPath)
+	}
+	keys := make([]string, 0, len(layerMap))
+	for key := range layerMap {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	layers := make([]map[string]interface{}, 0, len(keys))
+	for _, key := range keys {
+		layers = append(layers, layerMap[key])
+	}
+	return layers
+}
+
+func pcdMapData(pointMap *model.RobotdogMap) map[string]interface{} {
+	if pointMap == nil {
+		return map[string]interface{}{"id": 0, "url": "", "file_url": "", "format": "pcd", "preview_url": "", "layers": []map[string]interface{}{}}
+	}
+	data := map[string]interface{}{
+		"id":          pointMap.ID,
+		"tenant_id":   pointMap.TenantID,
+		"name":        pointMap.Name,
+		"format":      pointMap.Format,
+		"url":         pointMap.URL,
+		"preview_url": pointMap.PreviewURL,
+		"origin_x":    pointMap.OriginX,
+		"origin_y":    pointMap.OriginY,
+		"origin_z":    pointMap.OriginZ,
+		"scale":       pointMap.Scale,
+		"created_at":  pointMap.CreatedAt,
+		"updated_at":  pointMap.UpdatedAt,
+		"layers":      pcdMapLayers(pointMap.URL),
+	}
+	if pointMap.URL != "" {
+		if prefix, ok := pcdMapObjectPrefix(pointMap.URL); ok {
+			data["file_url"] = minioObjectURL(loadRobotdogMinioConfig(), prefix)
+		} else {
+			data["file_url"] = fullUploadURL(pointMap.URL)
+		}
+	} else {
+		data["file_url"] = ""
+	}
+	return data
+}
+
+func pcdUploadFiles(ctx *gf.GinCtx) []*multipart.FileHeader {
+	if err := ctx.Request.ParseMultipartForm(32 << 20); err != nil {
+		return nil
+	}
+	if ctx.Request.MultipartForm == nil {
+		return nil
+	}
+	files := make([]*multipart.FileHeader, 0)
+	for _, key := range []string{"files", "files[]", "file"} {
+		files = append(files, ctx.Request.MultipartForm.File[key]...)
+	}
+	return files
 }
 
 func (api *Index) GetList(ctx *gf.GinCtx) {
@@ -1114,10 +1465,48 @@ func (api *Index) GetPointCloud(ctx *gf.GinCtx) {
 		pointMap, err = mapDB.WithContext(ctx).Where(mapDB.TenantID.Eq(tenant)).Order(mapDB.ID.Desc()).First()
 	}
 	if err != nil || pointMap == nil {
-		gf.Success().SetMsg("获取点云地图").SetData(map[string]interface{}{"id": 0, "url": "", "format": "pcd", "preview_url": ""}).Regin(ctx)
+		gf.Success().SetMsg("获取点云地图").SetData(pcdMapData(nil)).Regin(ctx)
 		return
 	}
-	gf.Success().SetMsg("获取点云地图").SetData(pointMap).Regin(ctx)
+	gf.Success().SetMsg("获取点云地图").SetData(pcdMapData(pointMap)).Regin(ctx)
+}
+
+func (api *Index) GetPcdMap(ctx *gf.GinCtx) {
+	api.GetPointCloud(ctx)
+}
+
+func (api *Index) GetPcdFile(ctx *gf.GinCtx) {
+	objectPath := cleanMinioObjectPath(ctx.Query("path"))
+	if objectPath == "" || strings.ToLower(filepath.Ext(objectPath)) != ".pcd" {
+		gf.Failed().SetMsg("PCD文件路径不合法").Regin(ctx)
+		return
+	}
+	cfg := loadRobotdogMinioConfig()
+	client, err := cfg.client()
+	if err != nil {
+		gf.Failed().SetMsg("连接MinIO失败").SetData(err.Error()).Regin(ctx)
+		return
+	}
+	object, err := client.GetObject(ctx.Request.Context(), cfg.Bucket, objectPath, minio.GetObjectOptions{})
+	if err != nil {
+		gf.Failed().SetMsg("读取PCD文件失败").SetData(err.Error()).Regin(ctx)
+		return
+	}
+	defer object.Close()
+	stat, err := object.Stat()
+	if err != nil {
+		gf.Failed().SetMsg("PCD文件不存在").SetData(err.Error()).Regin(ctx)
+		return
+	}
+	ctx.Header("Content-Type", "application/octet-stream")
+	ctx.Header("Content-Disposition", "inline; filename="+filepath.Base(objectPath))
+	ctx.Header("Content-Transfer-Encoding", "binary")
+	ctx.Header("Cache-Control", "public, max-age=3600")
+	ctx.Header("Content-Length", fmt.Sprintf("%d", stat.Size))
+	ctx.Status(200)
+	if _, err := io.Copy(ctx.Writer, object); err != nil {
+		return
+	}
 }
 
 func (api *Index) GetNavData(ctx *gf.GinCtx) {
@@ -1172,31 +1561,75 @@ func (api *Index) GetAllMapNavData(ctx *gf.GinCtx) {
 	gf.Success().SetMsg("获取地图导航数据成功").SetData(data).Regin(ctx)
 }
 
+func (api *Index) GetPcdMapList(ctx *gf.GinCtx) {
+	param, _ := gf.RequestParam(ctx)
+	tenant := tenantID(ctx, param)
+	mapDB := dao.Query().RobotdogMap
+	where := []dao.Condition{mapDB.TenantID.Eq(tenant)}
+	if name := stringValue(param, "name", ""); name != "" {
+		where = append(where, mapDB.Name.Like("%"+name+"%"))
+	}
+	offset, limit := pageArgs(param)
+	rows, total, err := mapDB.WithContext(ctx).Where(where...).Order(mapDB.ID.Desc()).FindByPage(offset, limit)
+	if err != nil {
+		gf.Failed().SetMsg("获取点云地图列表失败").SetData(err).Regin(ctx)
+		return
+	}
+	list := make([]map[string]interface{}, 0, len(rows))
+	for _, row := range rows {
+		list = append(list, pcdMapData(row))
+	}
+	gf.Success().SetMsg("获取点云地图列表成功").SetData(map[string]interface{}{"list": list, "total": total}).Regin(ctx)
+}
+
 func (api *Index) UploadMap(ctx *gf.GinCtx) {
 	param, _ := gf.RequestParam(ctx)
 	tenant := tenantID(ctx, param)
 	now := time.Now()
-	url := stringValue(param, "url", "")
-	if file, err := ctx.FormFile("file"); err == nil && file != nil {
-		dir := "resource/uploads/robotdog/maps"
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			gf.Failed().SetMsg("创建地图目录失败").SetData(err).Regin(ctx)
+	mapURL := cleanMinioObjectPath(stringValue(param, "url", ""))
+	files := pcdUploadFiles(ctx)
+	if len(files) > 0 {
+		cfg := loadRobotdogMinioConfig()
+		client, err := cfg.client()
+		if err != nil {
+			gf.Failed().SetMsg("连接MinIO失败").SetData(err.Error()).Regin(ctx)
 			return
 		}
-		filename := fmt.Sprintf("%d_%s", now.UnixNano(), filepath.Base(file.Filename))
-		dst := filepath.Join(dir, filename)
-		if err := ctx.SaveUploadedFile(file, dst); err != nil {
-			gf.Failed().SetMsg("保存地图文件失败").SetData(err).Regin(ctx)
+		if err := ensureRobotdogMinioBucket(ctx.Request.Context(), client, cfg); err != nil {
+			gf.Failed().SetMsg("初始化MinIO桶失败").SetData(err.Error()).Regin(ctx)
 			return
 		}
-		url = "/" + strings.TrimPrefix(dst, "/")
+		prefix := fmt.Sprintf("maps/%d", now.UnixNano())
+		for i, file := range files {
+			if strings.ToLower(filepath.Ext(file.Filename)) != ".pcd" {
+				gf.Failed().SetMsg("地图文件仅支持.pcd格式").SetData(file.Filename).Regin(ctx)
+				return
+			}
+			filename := filepath.Base(file.Filename)
+			if filename == "." || filename == string(filepath.Separator) || strings.Contains(filename, "..") {
+				filename = fmt.Sprintf("layer_%d.pcd", i+1)
+			}
+			src, err := file.Open()
+			if err != nil {
+				gf.Failed().SetMsg("读取地图文件失败").SetData(err.Error()).Regin(ctx)
+				return
+			}
+			objectName := prefix + "/" + filename
+			_, err = client.PutObject(ctx.Request.Context(), cfg.Bucket, objectName, src, file.Size, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+			_ = src.Close()
+			if err != nil {
+				gf.Failed().SetMsg("上传地图文件到MinIO失败").SetData(err.Error()).Regin(ctx)
+				return
+			}
+		}
+		mapURL = prefix
 	}
 	pointMap := &model.RobotdogMap{
 		TenantID:   tenant,
 		Name:       stringValue(param, "name", "点云地图"),
 		Format:     stringValue(param, "format", "pcd"),
-		URL:        url,
-		PreviewURL: stringValue(param, "preview_url", ""),
+		URL:        mapURL,
+		PreviewURL: cleanUploadURL(stringValue(param, "preview_url", "")),
 		OriginX:    gf.Float64(param["origin_x"]),
 		OriginY:    gf.Float64(param["origin_y"]),
 		OriginZ:    gf.Float64(param["origin_z"]),
@@ -1208,12 +1641,16 @@ func (api *Index) UploadMap(ctx *gf.GinCtx) {
 		pointMap.Scale = 1
 	}
 	if pointMap.URL == "" {
-		gf.Failed().SetMsg("请上传地图文件或传入地图URL").Regin(ctx)
+		gf.Failed().SetMsg("请上传PCD地图文件或传入地图目录URL").Regin(ctx)
 		return
 	}
 	if err := dao.Query().RobotdogMap.WithContext(ctx).Create(pointMap); err != nil {
 		gf.Failed().SetMsg("上传地图失败").SetData(err).Regin(ctx)
 		return
 	}
-	gf.Success().SetMsg("上传地图成功").SetData(pointMap).Regin(ctx)
+	gf.Success().SetMsg("上传地图成功").SetData(pcdMapData(pointMap)).Regin(ctx)
+}
+
+func (api *Index) UploadPcdMap(ctx *gf.GinCtx) {
+	api.UploadMap(ctx)
 }
