@@ -130,6 +130,18 @@ type PTZController interface {
 	Realtime(ctx context.Context, target PTZTarget) (*RealtimeData, error)
 }
 
+type PTZNudgeController interface {
+	Nudge(ctx context.Context, target PTZTarget, axis string, delta float64, zoomMax float64) (*CommandResult, error)
+}
+
+type PTZZoomHomeController interface {
+	ZoomHome(ctx context.Context, target PTZTarget) (*CommandResult, error)
+}
+
+type PTZRefreshController interface {
+	Refresh(ctx context.Context, target PTZTarget) (*CommandResult, error)
+}
+
 func (t DogTarget) Addr() string {
 	return fmt.Sprintf("%s:%d", strings.TrimSpace(t.UDPHost), t.UDPPort)
 }
