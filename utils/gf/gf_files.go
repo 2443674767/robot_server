@@ -48,6 +48,19 @@ func GetFullUrl(url string) string {
 	} else if strings.HasPrefix(filseName, "qiniuoss") { //七牛云
 		BaseUrl, _ := gcfg.Instance("upload").Get(ctx, "qiniuoss.QBaseUrl")
 		return BaseUrl.String() + url
+	} else if strings.HasPrefix(filseName, "minio") { //MinIO
+		Endpoint, _ := gcfg.Instance("upload").Get(ctx, "minio.endpoint")
+		Bucket, _ := gcfg.Instance("upload").Get(ctx, "minio.bucket")
+		UseSSL, _ := gcfg.Instance("upload").Get(ctx, "minio.useSSL")
+		endpoint := strings.TrimRight(Endpoint.String(), "/")
+		if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+			scheme := "http"
+			if UseSSL.Bool() {
+				scheme = "https"
+			}
+			endpoint = scheme + "://" + endpoint
+		}
+		return endpoint + "/" + Bucket.String() + url
 	} else { //默认返回设置上传方式的地址
 		return GetRootUrl() + url
 	}
@@ -78,6 +91,19 @@ func GetRootUrl() string {
 	case "qiniuoss":
 		BaseUrl, _ := gcfg.Instance("upload").Get(ctx, "qiniuoss.QBaseUrl")
 		return BaseUrl.String()
+	case "minio":
+		Endpoint, _ := gcfg.Instance("upload").Get(ctx, "minio.endpoint")
+		Bucket, _ := gcfg.Instance("upload").Get(ctx, "minio.bucket")
+		UseSSL, _ := gcfg.Instance("upload").Get(ctx, "minio.useSSL")
+		endpoint := strings.TrimRight(Endpoint.String(), "/")
+		if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+			scheme := "http"
+			if UseSSL.Bool() {
+				scheme = "https"
+			}
+			endpoint = scheme + "://" + endpoint
+		}
+		return endpoint + "/" + Bucket.String()
 	default:
 		BaseUrl, _ := gcfg.Instance("upload").Get(ctx, "local.LBaseUrl")
 		return BaseUrl.String()
