@@ -227,8 +227,8 @@ func (api *Index) PtzMove(ctx *gf.GinCtx) {
 		Direction: command,
 		Speed:     gf.Float64(param["speed"]),
 		Duration:  gf.Int(param["duration"]),
-		Pan:       gf.Float64(param["pan"]),
-		Tilt:      gf.Float64(param["tilt"]),
+		Pan:       firstPositiveFloat(gf.Float64(param["step"]), gf.Float64(param["pan"]), gf.Float64(param["yaw"])),
+		Tilt:      firstPositiveFloat(gf.Float64(param["step"]), gf.Float64(param["tilt"]), gf.Float64(param["pitch"])),
 	}
 	zoomOpts := internalcontrol.ZoomOptions{
 		Direction: command,
@@ -250,20 +250,66 @@ func (api *Index) PtzMove(ctx *gf.GinCtx) {
 		result, err = driver.Left(ctx, target, moveOpts)
 	case "right":
 		result, err = driver.Right(ctx, target, moveOpts)
+	case "up_fast":
+		moveOpts.Tilt = ptzControlStep(param, 2) * 5
+		result, err = driver.Up(ctx, target, moveOpts)
+	case "down_fast":
+		moveOpts.Tilt = ptzControlStep(param, 2) * 5
+		result, err = driver.Down(ctx, target, moveOpts)
+	case "left_fast":
+		moveOpts.Pan = ptzControlStep(param, 5) * 5
+		result, err = driver.Left(ctx, target, moveOpts)
+	case "right_fast":
+		moveOpts.Pan = ptzControlStep(param, 5) * 5
+		result, err = driver.Right(ctx, target, moveOpts)
 	case "zoom_in":
 		result, err = driver.ZoomIn(ctx, target, zoomOpts)
 	case "zoom_out":
 		result, err = driver.ZoomOut(ctx, target, zoomOpts)
+	case "zoom_in_fast":
+		zoomOpts.Step = ptzControlStep(param, 0.5) * 5
+		result, err = driver.ZoomIn(ctx, target, zoomOpts)
+	case "zoom_out_fast":
+		zoomOpts.Step = ptzControlStep(param, 0.5) * 5
+		result, err = driver.ZoomOut(ctx, target, zoomOpts)
+	case "nudge":
+		nudgeDriver, ok := driver.(internalcontrol.PTZNudgeController)
+		if !ok {
+			gf.Failed().SetMsg("当前云台驱动不支持nudge控制").Regin(ctx)
+			return
+		}
+		axis := stringValue(param, "axis", "")
+		delta := gf.Float64(param["delta"])
+		if axis == "" || delta == 0 {
+			gf.Failed().SetMsg("nudge控制需要axis和delta").Regin(ctx)
+			return
+		}
+		result, err = nudgeDriver.Nudge(ctx, target, axis, delta, firstPositiveFloat(gf.Float64(param["zoom_max"]), gf.Float64(param["zoomMax"]), 30))
 	case "focus_near":
 		result, err = driver.FocusNear(ctx, target, focusOpts)
 	case "focus_far":
 		result, err = driver.FocusFar(ctx, target, focusOpts)
 	case "home":
 		result, err = driver.Home(ctx, target)
+	case "zoom_home":
+		zoomHomeDriver, ok := driver.(internalcontrol.PTZZoomHomeController)
+		if !ok {
+			gf.Failed().SetMsg("当前云台驱动不支持变倍回到1x").Regin(ctx)
+			return
+		}
+		result, err = zoomHomeDriver.ZoomHome(ctx, target)
 	case "angle_set":
+		yaw := gf.Float64(param["yaw"])
+		if !hasParam(param, "yaw") {
+			yaw = gf.Float64(param["pan"])
+		}
+		pitch := gf.Float64(param["pitch"])
+		if !hasParam(param, "pitch") {
+			pitch = gf.Float64(param["tilt"])
+		}
 		result, err = driver.SetAngle(ctx, target, internalcontrol.PTZAngleOptions{
-			Pan:      gf.Float64(param["pan"]),
-			Tilt:     gf.Float64(param["tilt"]),
+			Pan:      yaw,
+			Tilt:     pitch,
 			Roll:     gf.Float64(param["roll"]),
 			Duration: gf.Int(param["duration"]),
 		})
@@ -271,6 +317,13 @@ func (api *Index) PtzMove(ctx *gf.GinCtx) {
 		result, err = driver.TakePhoto(ctx, target, photoOptions(param))
 	case "stop":
 		result, err = driver.Stop(ctx, target)
+	case "refresh":
+		refreshDriver, ok := driver.(internalcontrol.PTZRefreshController)
+		if !ok {
+			gf.Failed().SetMsg("当前云台驱动不支持刷新控制").Regin(ctx)
+			return
+		}
+		result, err = refreshDriver.Refresh(ctx, target)
 	default:
 		gf.Failed().SetMsg("不支持的云台命令: " + command).Regin(ctx)
 		return
@@ -324,7 +377,7 @@ func (api *Index) PtzPhoto(ctx *gf.GinCtx) {
 	gf.Success().SetMsg("拍照成功").SetData(photoResponse(photo)).Regin(ctx)
 }
 
-func (api *Index) PtzPhotoList(ctx *gf.GinCtx) {
+func (api *Index) GetPtzPhotoList(ctx *gf.GinCtx) {
 	param, _ := gf.RequestParam(ctx)
 	tenant := tenantID(ctx, param)
 	offset, limit := pageArgs(param)
@@ -366,7 +419,7 @@ func (api *Index) PtzPhotoDel(ctx *gf.GinCtx) {
 	gf.Success().SetMsg("删除云台拍照记录成功").SetData(nil).Regin(ctx)
 }
 
-func (api *Index) PtzGetRealtime(ctx *gf.GinCtx) {
+func (api *Index) GetPtzGetRealtime(ctx *gf.GinCtx) {
 	param, _ := gf.RequestParam(ctx)
 	ptz, err := findPTZ(ctx, param)
 	if err != nil {
@@ -378,9 +431,18 @@ func (api *Index) PtzGetRealtime(ctx *gf.GinCtx) {
 		gf.Failed().SetMsg("获取云台驱动失败").SetData(err).Regin(ctx)
 		return
 	}
-	data, err := driver.Realtime(ctx, internalcontrol.FillPTZTargetDefaults(ptzTarget(ptz)))
+	target := internalcontrol.FillPTZTargetDefaults(ptzTarget(ptz))
+	data, err := driver.Realtime(ctx, target)
 	if err != nil {
-		gf.Failed().SetMsg("无法获取云台实时姿态").SetData(err).Regin(ctx)
+		gf.Failed().SetMsg("无法获取云台实时姿态").SetData(map[string]interface{}{
+			"error":      err.Error(),
+			"ptz_id":     ptz.ID,
+			"ptz_name":   ptz.Name,
+			"model":      ptz.Model,
+			"udp_host":   target.UDPHost,
+			"udp_port":   target.UDPPort,
+			"local_port": target.LocalPort,
+		}).Regin(ctx)
 		return
 	}
 	data.Driver = driverName
@@ -515,7 +577,7 @@ func presetFullUpdates(preset *model.RobotdogPtzPreset, now time.Time) map[strin
 	}
 }
 
-func (api *Index) PtzPresetList(ctx *gf.GinCtx) {
+func (api *Index) GetPtzPresetList(ctx *gf.GinCtx) {
 	param, _ := gf.RequestParam(ctx)
 	tenant := tenantID(ctx, param)
 	offset, limit := pageArgs(param)
@@ -542,7 +604,7 @@ func (api *Index) PtzPresetList(ctx *gf.GinCtx) {
 	gf.Success().SetMsg("获取云台预置位列表").SetData(map[string]interface{}{"list": list, "total": total}).Regin(ctx)
 }
 
-func (api *Index) PtzPresetDetail(ctx *gf.GinCtx) {
+func (api *Index) GetPtzPresetDetail(ctx *gf.GinCtx) {
 	param, _ := gf.RequestParam(ctx)
 	id := gf.Int64(param["id"])
 	if id == 0 {
@@ -696,10 +758,26 @@ func normalizePTZCommand(v string) string {
 		return "left"
 	case "right", "r", "pan_right":
 		return "right"
+	case "up_fast", "upfast", "tilt_up_fast":
+		return "up_fast"
+	case "down_fast", "downfast", "tilt_down_fast":
+		return "down_fast"
+	case "left_fast", "leftfast", "pan_left_fast":
+		return "left_fast"
+	case "right_fast", "rightfast", "pan_right_fast":
+		return "right_fast"
 	case "zoom_in", "zoomin", "zoom+":
 		return "zoom_in"
 	case "zoom_out", "zoomout", "zoom-":
 		return "zoom_out"
+	case "zoom_in_fast", "zoomin_fast", "zoominfast", "zoom+_fast":
+		return "zoom_in_fast"
+	case "zoom_out_fast", "zoomout_fast", "zoomoutfast", "zoom-_fast":
+		return "zoom_out_fast"
+	case "zoom_home", "zoomhome", "zoom_reset", "zoom_zero":
+		return "zoom_home"
+	case "nudge":
+		return "nudge"
 	case "focus_near", "focusnear", "focus+":
 		return "focus_near"
 	case "focus_far", "focusfar", "focus-":
@@ -712,6 +790,8 @@ func normalizePTZCommand(v string) string {
 		return "photo"
 	case "stop", "halt":
 		return "stop"
+	case "refresh", "status":
+		return "refresh"
 	default:
 		return v
 	}
@@ -802,6 +882,10 @@ func firstPositiveFloat(values ...float64) float64 {
 	return 0
 }
 
+func ptzControlStep(param map[string]interface{}, fallback float64) float64 {
+	return firstPositiveFloat(gf.Float64(param["step"]), gf.Float64(param["speed"]), gf.Float64(param["pan"]), gf.Float64(param["tilt"]), gf.Float64(param["yaw"]), gf.Float64(param["pitch"]), fallback)
+}
+
 func (api *Index) RunRoute(ctx *gf.GinCtx) {
 	param, _ := gf.RequestParam(ctx)
 	tenant := tenantID(ctx, param)
@@ -845,6 +929,25 @@ func (api *Index) RunRoute(ctx *gf.GinCtx) {
 	}
 	if taskStatus == "done" {
 		task.Progress = 100
+	}
+	if action == "stop" || action == "pause" || action == "complete" {
+		updates := map[string]interface{}{
+			"status":     taskStatus,
+			"message":    "route command " + action,
+			"updated_at": now,
+		}
+		if taskStatus == "done" {
+			updates["progress"] = 100
+		}
+		if _, err := dao.Query().RobotdogTask.WithContext(ctx).Where(
+			dao.Query().RobotdogTask.TenantID.Eq(tenant),
+			dao.Query().RobotdogTask.RouteID.Eq(route.ID),
+			dao.Query().RobotdogTask.Type.Eq("route"),
+			dao.Query().RobotdogTask.Status.Eq("running"),
+		).Updates(updates); err != nil {
+			gf.Failed().SetMsg("更新运行中航线任务失败").SetData(err).Regin(ctx)
+			return
+		}
 	}
 	if err := dao.Query().RobotdogTask.WithContext(ctx).Create(task); err != nil {
 		gf.Failed().SetMsg("创建航线任务失败").SetData(err).Regin(ctx)
