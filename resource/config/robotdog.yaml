@@ -10,8 +10,8 @@ data:
   dog_udp_port: 30000
   dog_udp_local_port: "30002"
   ptz_udp_host: "10.21.31.64"
-  ptz_udp_port: 3000
-  ptz_udp_local_port: "3000"
+  ptz_udp_port: 1030
+  ptz_udp_local_port: "0"
   ptz_type: "libra4"
   ptz_target_system_id: 3
   ptz_target_component_id: 1
