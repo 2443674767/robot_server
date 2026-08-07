@@ -79,6 +79,30 @@ func New(uptype ...string) StaticCloud {
 		upTypeStr = confType.String()
 	}
 	switch upTypeStr {
+	case "minio":
+		minioConf, _ := gcfg.Instance("upload").Get(ctx, "minio")
+		mapConf := gconv.Map(minioConf)
+		endpoint := gf.String(mapConf["endpoint"])
+		scheme := "http"
+		if gf.Bool(mapConf["useSSL"]) {
+			scheme = "https"
+		}
+		baseURL := endpoint
+		if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+			baseURL = scheme + "://" + strings.TrimRight(endpoint, "/") + "/" + gf.String(mapConf["bucket"])
+		} else {
+			baseURL = strings.TrimRight(baseURL, "/") + "/" + gf.String(mapConf["bucket"])
+		}
+		config = Config{
+			BaseUrl:    baseURL,
+			Endpoint:   endpoint,
+			KeyId:      gf.String(mapConf["accessKey"]),
+			Secret:     gf.String(mapConf["secretKey"]),
+			BucketName: gf.String(mapConf["bucket"]),
+			DirPath:    gf.String(mapConf["dirPath"]),
+			UseHTTPS:   gf.Bool(mapConf["useSSL"]),
+		}
+		staticCloud = &MinIO{}
 	case "alioss":
 		alioss, _ := gcfg.Instance("upload").Get(ctx, "alioss")
 		mapConf := gconv.Map(alioss)
